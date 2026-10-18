@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EnergiOS — 3D Digital Twin, Live Energy & AI Copilot</title>
+  <meta name="energios-api-base-url" content="http://127.0.0.1:8000">
+
+  <!-- Typography & Icons (Exact Match to index.html) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            velora: {
+              bg: '#FAF8F5',
+              card: '#FFFFFF',
+              pill: '#F4F0E8',
+              orange: '#FF7A00',
+              yellow: '#FACC15',
+              green: '#22C55E',
+              dark: '#1E2022',
+              muted: '#71767B',
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['Space Grotesk', 'monospace'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Theme Manager -->
+  <script src="src/js/theme.js"></script>
+
+  <!-- Exact Velora Stylesheet -->
+  <link rel="stylesheet" href="src/css/velora_exact.css">
+
+  <!-- Three.js & OrbitControls -->
+  <script src="src/vendor/three.min.js"></script>
+  <script src="src/vendor/OrbitControls.js"></script>
+
+  <!-- Telemetry Data & 3D Scene Controller -->
+  <script src="src/data/township_data.js"></script>
+  <script src="src/js/api.js"></script>
+  <script src="src/js/township_3d.js"></script>
+</head>
+
+<body class="bg-[#FAF8F5] text-[#1E2022] dark:text-white antialiased min-h-screen flex flex-col p-6 lg:p-8 selection:bg-orange-100 selection:text-orange-900 transition-colors duration-200">
+
+  <!-- =================================================================== -->
+  <!-- APPLE DYNAMIC ISLAND (Minimised state for AI Copilot)               -->
+  <!-- =================================================================== -->
+  <div id="dynamic-island" class="fixed top-3.5 left-1/2 -translate-x-1/2 z-50 transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] select-none hidden" onclick="twinApp.restoreAiChat()">
+    
+    <!-- Collapsed Pill (Apple Dynamic Island State) - Click expands back to AI Copilot in right column -->
+    <div id="island-collapsed" onclick="twinApp.restoreAiChat()" class="h-9 px-4 rounded-full bg-black text-white flex items-center justify-between gap-3.5 shadow-xl shadow-black/40 border border-white/10 cursor-pointer hover:scale-[1.03] transition-all" title="Click to expand EnergiOS AI Copilot">
+      <div class="flex items-center gap-2">
+        <span class="w-3.5 h-3.5 flex items-center justify-center text-[#FF7A00]">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor">
+            <circle cx="12" cy="3" r="2" /><circle cx="12" cy="21" r="2" />
+            <circle cx="3" cy="12" r="2" /><circle cx="21" cy="12" r="2" />
+            <circle cx="5.6" cy="5.6" r="2" /><circle cx="18.4" cy="18.4" r="2" />
+            <circle cx="5.6" cy="18.4" r="2" /><circle cx="18.4" cy="5.6" r="2" />
+          </svg>
+        </span>
+        <span class="text-xs font-semibold text-white tracking-tight font-sans">EnergiOS AI</span>
+      </div>
+
+      <!-- iPhone Camera Notch Hole -->
+      <span class="w-2.5 h-2.5 rounded-full bg-[#1A1B1E] border border-white/10"></span>
+    </div>
+
+    <!-- Expanded Dynamic Island -->
+    <div id="island-expanded" class="hidden w-[760px] max-w-[94vw] bg-[#000000] text-white rounded-[36px] shadow-2xl shadow-black/90 border border-white/10 p-6 pt-3 relative overflow-hidden backdrop-blur-2xl">
+      
+      <!-- Top Center: iPhone Physical Camera Cutout Notch -->
+      <div class="w-28 h-5 rounded-full bg-[#121316] mx-auto mb-3 flex items-center justify-center gap-2.5 border border-white/5">
+        <div class="w-2.5 h-2.5 rounded-full bg-[#070709] border border-blue-900/50 flex items-center justify-center">
+          <span class="w-1 h-1 rounded-full bg-blue-500/50"></span>
+        </div>
+        <span class="w-1.5 h-1.5 rounded-full bg-[#050507]"></span>
+      </div>
+
+      <!-- Header Row inside Island -->
+      <div class="flex items-center justify-between pb-3 px-1 border-b border-white/10">
+        <div class="flex items-center gap-2.5">
+          <!-- Orange Asterisk Sunburst Logo -->
+          <div class="w-6 h-6 flex items-center justify-center text-[#FF7A00]">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
+              <circle cx="12" cy="3" r="2" /><circle cx="12" cy="21" r="2" />
+              <circle cx="3" cy="12" r="2" /><circle cx="21" cy="12" r="2" />
+              <circle cx="5.6" cy="5.6" r="2" /><circle cx="18.4" cy="18.4" r="2" />
+              <circle cx="5.6" cy="18.4" r="2" /><circle cx="18.4" cy="5.6" r="2" />
+              <line x1="12" y1="5" x2="12" y2="19" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" />
+              <line x1="5" y1="12" x2="19" y2="12" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" />
+              <line x1="7" y1="7" x2="17" y2="17" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" />
+              <line x1="7" y1="17" x2="17" y2="7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" />
+            </svg>
+          </div>
+          <span class="text-sm font-bold tracking-tight text-white font-sans">EnergiOS AI</span>
+        </div>
+
+        <!-- Right Controls -->
+        <div class="flex items-center gap-2">
+          <button class="w-7 h-7 rounded-full bg-[#1C1D21] hover:bg-neutral-800 text-neutral-300 hover:text-white flex items-center justify-center text-xs transition-colors" title="Settings">
+            <span class="material-symbols-outlined text-[16px]">more_horiz</span>
+          </button>
+          <button onclick="dynamicIsland.collapse()" class="w-7 h-7 rounded-full bg-[#1C1D21] hover:bg-neutral-800 text-neutral-400 hover:text-white flex items-center justify-center text-xs transition-colors" title="Collapse Island">
+            <span class="material-symbols-outlined text-[16px]">close</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Two Columns Body -->
+      <div class="grid grid-cols-1 md:grid-cols-12 gap-6 pt-4">
+
+        <!-- Left Column: Chat Assistant (7 Cols) -->
+        <div class="md:col-span-7 flex flex-col justify-between space-y-3">
+          <div>
+            <span class="text-xs font-semibold text-neutral-400 block mb-2 font-sans">Chat Assistant</span>
+            <div class="bg-[#1C1D21] border border-white/5 rounded-2xl p-4 text-xs text-neutral-200 leading-relaxed shadow-sm">
+              <p id="island-agent-bubble-text">
+                Here's an analysis of your 3D digital twin. Fox Hub Level 2 detected a <b>+28.4 kW anomaly</b> (AHU chilled water valve stuck 98% open). Clean solar is supplying <b>49.4%</b> of township demand. Would you like me to initiate an automated mitigation?
+              </p>
+            </div>
+          </div>
+
+          <!-- Interactive Quick Prompt Chips -->
+          <div class="flex items-center gap-1.5 flex-wrap pt-0.5">
+            <button onclick="dynamicIsland.sendQuickPrompt('Analyze Level 2 anomaly in 3D')" class="px-2.5 py-1 rounded-full text-[10px] font-medium bg-[#1C1D21] hover:bg-[#282A30] text-neutral-300 border border-white/5 transition-all">
+              ⚠️ Level 2 anomaly
+            </button>
+            <button onclick="dynamicIsland.sendQuickPrompt('Maximize solar vs grid balance')" class="px-2.5 py-1 rounded-full text-[10px] font-medium bg-[#1C1D21] hover:bg-[#282A30] text-neutral-300 border border-white/5 transition-all">
+              ☀️ Solar vs grid
+            </button>
+            <button onclick="dynamicIsland.sendQuickPrompt('Calculate TNB commercial tariff savings')" class="px-2.5 py-1 rounded-full text-[10px] font-medium bg-[#1C1D21] hover:bg-[#282A30] text-neutral-300 border border-white/5 transition-all">
+              💰 Calculate TNB savings
+            </button>
+          </div>
+
+          <!-- Input Bar -->
+          <form onsubmit="dynamicIsland.handleUserSubmit(event)" class="mt-2 flex items-center gap-2 bg-[#121316] border border-white/10 rounded-full px-3.5 py-2 shadow-inner">
+            <div class="flex items-center gap-1 text-neutral-500 pl-1">
+              <span class="w-1.5 h-1.5 rounded-full bg-neutral-500"></span>
+              <span class="w-1.5 h-1.5 rounded-full bg-neutral-500"></span>
+              <span class="w-1.5 h-1.5 rounded-full bg-neutral-500"></span>
+            </div>
+            <input id="island-user-input" type="text" placeholder="Quick natural energy prompt..." class="bg-transparent text-xs text-white placeholder:text-neutral-500 outline-none flex-1 px-1 font-sans">
+            <button type="submit" class="w-6 h-6 rounded-full bg-white text-black flex items-center justify-center hover:bg-neutral-200 transition-colors shrink-0" title="Send">
+              <span class="material-symbols-outlined text-[14px]">arrow_upward</span>
+            </button>
+          </form>
+        </div>
+
+        <!-- Right Column: Agent Logs (5 Cols) -->
+        <div class="md:col-span-5 flex flex-col justify-between border-t md:border-t-0 md:border-l border-white/10 md:pl-5 pt-3 md:pt-0">
+          <div>
+            <span class="text-xs font-semibold text-neutral-400 block mb-2 font-sans">Agent Logs</span>
+            <div id="island-agent-logs-list" class="space-y-2.5 font-mono text-[11px] max-h-[190px] overflow-y-auto pr-1">
+              <div class="flex items-start gap-1.5 leading-snug">
+                <span class="text-neutral-500 whitespace-nowrap">• 14:12:05 —</span>
+                <span class="text-neutral-300">Synchronized 3D SCADA telemetry for 4 assets...</span>
+              </div>
+              <div class="flex items-start gap-1.5 leading-snug">
+                <span class="text-neutral-500 whitespace-nowrap">• 14:12:12 —</span>
+                <span class="text-neutral-300">Level 2 AHU chilled water valve stuck 98% <span class="text-amber-400">⚠️</span></span>
+              </div>
+              <div class="flex items-start gap-1.5 leading-snug">
+                <span class="text-neutral-500 whitespace-nowrap">• 14:14:02 —</span>
+                <span class="text-neutral-300">Optimized solar battery allocation <span class="text-emerald-400">✅</span></span>
+              </div>
+              <div class="flex items-start gap-1.5 leading-snug">
+                <span class="text-neutral-500 whitespace-nowrap">• 14:15:30 —</span>
+                <span class="text-neutral-300">Telemetry feed active (12ms latency)...</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+
+  <!-- =================================================================== -->
+  <!-- TOP NAVIGATION BAR (Clean with Dynamic Island above)                -->
+  <!-- =================================================================== -->
+  <header class="w-full flex items-center justify-between pb-5 max-w-[1540px] mx-auto relative z-10">
+    
+    <!-- Brand Logo: Exact Orange Asterisk Sunburst + EnergiOS -->
+    <a href="index.html" class="flex items-center gap-2.5 group">
+      <div class="w-7 h-7 flex items-center justify-center text-[#FF7A00]">
+        <!-- Exact 8-point Sunburst Asterisk Icon from idea-02 -->
+        <svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor">
+          <circle cx="12" cy="3" r="2" />
+          <circle cx="12" cy="21" r="2" />
+          <circle cx="3" cy="12" r="2" />
+          <circle cx="21" cy="12" r="2" />
+          <circle cx="5.6" cy="5.6" r="2" />
+          <circle cx="18.4" cy="18.4" r="2" />
+          <circle cx="5.6" cy="18.4" r="2" />
+          <circle cx="18.4" cy="5.6" r="2" />
+          <line x1="12" y1="5" x2="12" y2="19" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" />
+          <line x1="5" y1="12" x2="19" y2="12" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" />
+          <line x1="7" y1="7" x2="17" y2="17" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" />
+          <line x1="7" y1="17" x2="17" y2="7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" />
+        </svg>
+      </div>
+      <span class="text-xl font-bold tracking-tight text-[#1E2022] dark:text-white font-sans">EnergiOS</span>
+    </a>
+
+    <!-- Center Space Reserved for Dynamic Island -->
+    <div class="hidden sm:block w-32"></div>
+
+    <!-- Right Controls: SCADA Status Tag, Theme Toggle, Profile Avatar -->
+    <div class="flex items-center gap-4 text-[#71767B]">
+      
+      <!-- Live SCADA Status Tag -->
+      <div id="api-status-pill" class="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200/80 dark:border-emerald-800/60 text-emerald-800 dark:text-emerald-300 text-[11px] font-semibold cursor-pointer" title="Real-time 3D SCADA Telemetry Stream Connected">
+        <span id="api-status-dot" class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+        <span id="api-status-text" class="font-mono">SCADA Live (12ms)</span>
+      </div>
+
+      <!-- Theme Toggle Button -->
+      <button id="theme-toggle-btn" onclick="themeManager.toggle()" class="w-8 h-8 rounded-full bg-white dark:bg-[#162030] border border-[#EBE7DF] dark:border-white/10 flex items-center justify-center text-[#71767B] dark:text-[#94A3B8] hover:text-[#1E2022] dark:hover:text-white transition-all shadow-2xs hover:scale-105 active:scale-95" title="Toggle Dark / Light Mode">
+        <span class="material-symbols-outlined text-[18px] theme-icon-moon">dark_mode</span>
+        <span class="material-symbols-outlined text-[18px] theme-icon-sun hidden">light_mode</span>
+      </button>
+
+      <!-- Search Icon -->
+      <button class="hover:text-[#1E2022] dark:hover:text-white transition-colors" title="Search" onclick="twinApp.showToast('Press ⌘K to search assets')">
+        <span class="material-symbols-outlined text-[20px]">search</span>
+      </button>
+
+      <!-- Profile Avatar -->
+      <div class="w-8 h-8 rounded-full overflow-hidden border border-slate-200 dark:border-neutral-700 cursor-pointer shadow-xs" title="Operator Profile">
+        <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&h=120&q=80" alt="Avatar" class="w-full h-full object-cover">
+      </div>
+    </div>
+  </header>
+
+  <!-- =================================================================== -->
+  <!-- MAIN APP CONTAINER WITH LEFT FLOATING SIDEBAR + DIGITAL TWIN CANVAS -->
+  <!-- =================================================================== -->
+  <div class="flex-1 w-full max-w-[1540px] mx-auto flex items-start gap-6">
+
+    <!-- FLOATING VERTICAL PILL NAVIGATION SIDEBAR (Exact Copy from index.html) -->
+    <aside class="velora-sidebar hidden md:flex shrink-0">
+      <a href="index.html" class="velora-nav-btn" title="Dashboard Overview">
+        <span class="material-symbols-outlined text-[19px]">grid_view</span>
+      </a>
+      <a href="digital-twin.html" class="velora-nav-btn active" title="Spatial Digital Twin">
+        <span class="material-symbols-outlined text-[19px]">domain</span>
+      </a>
+      <a href="settings.html" class="velora-nav-btn" title="Settings & Preferences">
+        <span class="material-symbols-outlined text-[19px]">settings</span>
+      </a>
+      <button class="velora-nav-btn" title="Provenance & Reports" onclick="twinApp.showToast('Public Benchmark: BDG2 v1.0 · Malaysian TNB Commercial Tariffs')">
+        <span class="material-symbols-outlined text-[19px]">description</span>
+      </button>
+    </aside>
+
+    <!-- MAIN DASHBOARD CONTENT AREA -->
+    <div class="flex-1 min-w-0 space-y-3.5">
+
+      <!-- =============================================================== -->
+      <!-- HERO TITLE ROW (Wording under Spatial Digital Twin Deleted)      -->
+      <!-- =============================================================== -->
+      <section class="flex items-center justify-between gap-4 pt-0.5">
+        <div>
+          <h1 class="text-3xl lg:text-[38px] font-extrabold tracking-tight text-[#1E2022] dark:text-white leading-[1.15]">
+            Spatial Digital Twin
+          </h1>
+        </div>
+      </section>
+
+      <!-- =============================================================== -->
+      <!-- 50 / 50 MAIN WORKSPACE: LEFT 3D TWIN / RIGHT 30% DATA + 70% AI  -->
+      <!-- =============================================================== -->
+      <main class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+
+        <!-- ============================================================= -->
+        <!-- LEFT HALF (50%): 3D DIGITAL TWIN WITH IN-CONTAINER ASSETS BAR -->
+        <!-- ============================================================= -->
+        <section class="lg:col-span-6 velora-card p-0 relative overflow-hidden flex flex-col h-[calc(100vh-190px)] min-h-[660px] max-h-[880px] rounded-3xl border border-slate-200/80 dark:border-neutral-800 shadow-sm bg-gradient-to-b from-[#F8FAFC] to-[#E2E8F0] dark:from-[#0B1120] dark:to-[#020617]">
+
+          <!-- Top Floating Controls Header over 3D Canvas (ASSETS BAR INSIDE 3D CONTAINER) -->
+          <div class="absolute top-3.5 left-3.5 right-3.5 z-20 pointer-events-none flex items-center justify-between gap-2 flex-wrap">
+            
+            <!-- Left: Assets Selector Top Bar + Floor Selector inside 3D Container -->
+            <div class="pointer-events-auto flex items-center gap-1.5 flex-wrap">
+              <div id="building-picker-container" class="velora-pill-container bg-white/95 dark:bg-neutral-900/90 backdrop-blur-md border border-[#EBE7DF] dark:border-neutral-700 shadow-sm flex-wrap p-1">
+                <!-- Injected dynamically by digital_twin_app.js: Township Overview, Bull Tower, Fox Hub (⚠️ ALERT), Bear Center, Hog Arena -->
+              </div>
+
+              <!-- Floor Selector Pills Container -->
+              <div id="floor-picker-container" class="pointer-events-auto"></div>
+            </div>
+
+            <!-- Right: 3D Camera & Lighting Controls Dock -->
+            <div class="pointer-events-auto flex items-center gap-1.5 bg-white/95 dark:bg-neutral-900/90 backdrop-blur-md p-1 rounded-2xl shadow-sm border border-[#EBE7DF] dark:border-neutral-700 shrink-0">
+              <button onclick="twinApp.resetView()" class="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-[#1E2022] dark:text-white flex items-center justify-center transition-colors shadow-2xs" title="Reset 3D Camera">
+                <span class="material-symbols-outlined text-[17px]">center_focus_strong</span>
+              </button>
+              <button onclick="twinApp.toggleNightMode()" class="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-[#1E2022] dark:text-white flex items-center justify-center transition-colors shadow-2xs" title="Toggle Day/Night Lighting">
+                <span id="icon-night-mode" class="material-symbols-outlined text-[17px]">dark_mode</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- 3D Three.js WebGL Canvas Container -->
+          <div id="township-3d-container" class="w-full h-full relative cursor-grab active:cursor-grabbing"></div>
+
+          <!-- SVG Leader Lines Overlay for 3D Anomaly Callouts across Towers/Floors -->
+          <svg id="anomaly-leader-svg" class="absolute inset-0 w-full h-full pointer-events-none z-20 overflow-visible">
+            <defs>
+              <filter id="glow-red" x="-20%" y="-20%" width="140%" height="140%">
+                <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#ef4444" flood-opacity="0.6"/>
+              </filter>
+            </defs>
+            <g id="anomaly-leader-paths-group"></g>
+          </svg>
+
+          <!-- Dynamic 2D Alert Markers Container (Overview Tower Pins & Exploded Level Callouts) -->
+          <div id="alert-markers-container" class="absolute inset-0 pointer-events-none z-20 overflow-visible"></div>
+
+          <!-- Bottom Left Compact Microgrid Telemetry Overlay -->
+          <div class="absolute bottom-3.5 left-3.5 z-10 pointer-events-auto bg-white/95 dark:bg-neutral-900/90 backdrop-blur-md p-2 px-3 rounded-xl flex items-center gap-3 text-xs font-mono shadow-sm border border-[#EBE7DF] dark:border-neutral-700">
+            <div>
+              <span class="text-[8.5px] text-[#71767B] dark:text-slate-400 block uppercase font-bold">TOTAL LOAD</span>
+              <span class="font-extrabold text-[#1E2022] dark:text-white text-xs">8.42 MW</span>
+            </div>
+            <div class="w-px h-5 bg-slate-200 dark:bg-neutral-700"></div>
+            <div>
+              <span class="text-[8.5px] text-emerald-600 dark:text-emerald-400 block uppercase font-bold">SOLAR YIELD</span>
+              <span class="font-extrabold text-emerald-600 dark:text-emerald-400 text-xs">4.15 MW (49%)</span>
+            </div>
+            <div class="w-px h-5 bg-slate-200 dark:bg-neutral-700"></div>
+            <div>
+              <span class="text-[8.5px] text-sky-600 dark:text-sky-400 block uppercase font-bold">BESS</span>
+              <span class="font-extrabold text-sky-600 dark:text-sky-400 text-xs">4.2 / 5.0 MWh</span>
+            </div>
+          </div>
+
+          <!-- Compact Floor Alert Callout Popup (Appears when level alert is clicked) -->
+          <div id="floor-alert-callout" class="hidden absolute bottom-3.5 right-3.5 max-w-sm z-30 bg-white/95 dark:bg-neutral-900/95 backdrop-blur-xl p-3.5 rounded-2xl border border-rose-500/70 dark:border-rose-500/70 shadow-2xl transition-all duration-300 opacity-0 translate-y-2 select-none">
+            <div class="flex flex-col gap-2">
+              <div class="flex items-center justify-between gap-2">
+                <span id="callout-anomaly-badge" class="px-2 py-0.5 rounded-full text-[9.5px] font-bold bg-rose-100 dark:bg-rose-950/80 text-rose-700 dark:text-rose-300 border border-rose-300 font-mono flex items-center gap-1">
+                  <span class="w-1.5 h-1.5 rounded-full bg-rose-600 animate-pulse"></span>
+                  <span id="callout-anomaly-id">ANOM-7421</span>
+                </span>
+                <span id="callout-anomaly-impact" class="text-[10.5px] font-mono font-bold text-rose-600 dark:text-rose-400">+28.4 kW surge</span>
+              </div>
+              <div>
+                <h4 id="callout-anomaly-title" class="text-xs font-bold text-[#1E2022] dark:text-white font-sans leading-tight">
+                  Low Delta-T Valve Passing
+                </h4>
+                <p id="callout-anomaly-detail" class="text-[11px] text-[#71767B] dark:text-slate-300 mt-1 leading-snug font-sans">
+                  AHU chilled water 2-way valve stuck 98% open during off-peak window.
+                </p>
+              </div>
+              <div class="flex items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-neutral-800">
+                <span id="callout-floor-name" class="text-[10px] font-bold text-slate-500 dark:text-slate-400 truncate max-w-[150px]">Fox Hub • Level 2</span>
+                <div class="flex items-center gap-1.5 shrink-0">
+                  <button id="callout-ask-ai-btn" onclick="twinApp.askCopilotAboutFloorAlert()" class="px-2.5 py-1 rounded-lg bg-[#FF7A00] hover:bg-[#ea6d00] text-white text-[11px] font-bold flex items-center gap-1 shadow-xs transition-transform active:scale-95 cursor-pointer" title="Ask EnergiOS AI to analyze and fix this anomaly">
+                    <span class="material-symbols-outlined text-[13px]">smart_toy</span>
+                    <span>Ask EnergiOS AI</span>
+                  </button>
+                  <button onclick="twinApp.hideFloorAlertCallout()" class="px-2 py-1 rounded-lg bg-slate-100 dark:bg-neutral-800 hover:bg-slate-200 dark:hover:bg-neutral-700 text-[#1E2022] dark:text-white text-[11px] font-medium transition-colors cursor-pointer">
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </section>
+
+        <!-- ============================================================= -->
+        <!-- RIGHT HALF (50%): 30% LIVE DATA CONTAINER & 70% AI CHAT        -->
+        <!-- ============================================================= -->
+        <section class="lg:col-span-6 flex flex-col gap-4 h-[calc(100vh-190px)] min-h-[660px] max-h-[880px]">
+
+          <!-- =========================================================== -->
+          <!-- CONTAINER 1: LIVE USAGE                                     -->
+          <!-- FOUR POWER DEMAND CHARTS FOR 4 BUILDINGS (INDEX.HTML STYLE) -->
+          <!-- =========================================================== -->
+          <div id="twin-live-usage-card" style="flex: 0 0 auto;" class="velora-card p-3.5 lg:p-4 flex flex-col justify-between border border-slate-200/80 dark:border-neutral-800 shadow-sm rounded-3xl bg-white dark:bg-[#121824] transition-all">
+            
+            <!-- Container Header with 4 Assets Label & Legend -->
+            <div class="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-neutral-800/80 shrink-0">
+              <div class="flex items-center gap-2">
+                <div class="w-6 h-6 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                  <span class="material-symbols-outlined text-[16px]">electric_meter</span>
+                </div>
+                <div>
+                  <h2 class="text-xs font-bold text-[#1E2022] dark:text-white font-sans uppercase tracking-wider">
+                    Live Building Power Demand
+                  </h2>
+                  <p class="text-[10px] font-mono text-[#71767B] dark:text-slate-400">Radial Speedometer Dials · Pure Source (Solar / Grid)</p>
+                </div>
+              </div>
+
+              <!-- Energy Source Legend: Solar (Green) vs Grid (Blue) -->
+              <div class="flex items-center gap-2 text-[10px] font-mono">
+                <span class="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/80 border border-emerald-300 dark:border-emerald-700 text-emerald-800 dark:text-emerald-300 font-bold">
+                  <span class="w-2 h-2 rounded-full bg-[#22C55E]"></span> ☀️ Solar (Green)
+                </span>
+                <span class="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/80 border border-blue-300 dark:border-blue-700 text-blue-800 dark:text-blue-300 font-bold">
+                  <span class="w-2 h-2 rounded-full bg-[#2563EB]"></span> ⚡ Grid (Blue)
+                </span>
+              </div>
+            </div>
+
+            <!-- 4 Building Power Demand Charts (1 Chart Per Building, Index.html Speedometer Dial Style 100%) -->
+            <div id="four-buildings-dials-grid" class="grid grid-cols-2 xl:grid-cols-4 gap-3 pt-2 items-stretch">
+              <!-- Dynamically populated by digital_twin_app.js: Bull Tower, Fox Hub, Bear Center, Hog Arena -->
+            </div>
+
+          </div>
+
+          <!-- =========================================================== -->
+          <!-- CONTAINER 2: AI COPILOT CHATBOT (100% DESIGN MATCH TO PHOTO) -->
+          <!-- =========================================================== -->
+          <div id="twin-ai-chat-card" style="flex: 1 1 0%; min-height: 280px;" class="p-5 lg:p-6 flex flex-col overflow-hidden rounded-[32px] border-2 border-[#FFD2A8] dark:border-orange-500/40 shadow-[0_0_35px_rgba(255,140,0,0.18)] dark:shadow-[0_0_35px_rgba(255,140,0,0.12)] bg-white dark:bg-[#101726] transition-all">
+            
+            <!-- Chatbot Header (Exact Match to Photo with Minimise Button) -->
+            <div class="flex items-center justify-between pb-3 shrink-0">
+              <div class="flex items-center gap-3">
+                <!-- 8-Point Asterisk Sunburst Icon in Warm Terracotta/Orange -->
+                <div class="w-8 h-8 flex items-center justify-center text-[#C25E2E] shrink-0">
+                  <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor">
+                    <circle cx="12" cy="3" r="2" />
+                    <circle cx="12" cy="21" r="2" />
+                    <circle cx="3" cy="12" r="2" />
+                    <circle cx="21" cy="12" r="2" />
+                    <circle cx="5.6" cy="5.6" r="2" />
+                    <circle cx="18.4" cy="18.4" r="2" />
+                    <circle cx="5.6" cy="18.4" r="2" />
+                    <circle cx="18.4" cy="5.6" r="2" />
+                    <line x1="12" y1="5" x2="12" y2="19" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" />
+                    <line x1="5" y1="12" x2="19" y2="12" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" />
+                    <line x1="7" y1="7" x2="17" y2="17" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" />
+                    <line x1="7" y1="17" x2="17" y2="7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 class="text-base font-bold text-[#111827] dark:text-white font-sans tracking-tight leading-snug">
+                    EnergiOS AI Energy Copilot
+                  </h3>
+                  <p class="text-xs text-[#6B7280] dark:text-neutral-400 font-sans">
+                    Autonomous HVAC Optimization &amp; Anomaly Triage
+                  </p>
+                </div>
+              </div>
+
+              <!-- Right: Segmented Button Chat | Agent Log + Minimise Button -->
+              <div class="flex items-center gap-2 shrink-0">
+                <div class="flex items-center p-0.5 rounded-full bg-slate-100 dark:bg-neutral-800 border border-slate-200 dark:border-neutral-700/80 text-xs font-semibold shrink-0">
+                  <button id="ai-mode-btn-chat" onclick="twinApp.setAiViewMode('chat')" class="px-2.5 py-1 rounded-full text-[11px] font-bold transition-all bg-white dark:bg-neutral-900 text-[#1E2022] dark:text-white shadow-2xs cursor-pointer flex items-center gap-1.5" title="Switch to AI Chat">
+                    <span class="material-symbols-outlined text-[13px] text-[#FF7A00]">chat</span>
+                    <span>Chat</span>
+                  </button>
+                  <button id="ai-mode-btn-log" onclick="twinApp.setAiViewMode('log')" class="px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all text-slate-500 hover:text-slate-900 dark:text-neutral-400 dark:hover:text-white cursor-pointer flex items-center gap-1.5" title="View Autonomous Agent Operations">
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span>Agent Log</span>
+                  </button>
+                </div>
+                <button id="ai-chat-minimize-btn" onclick="twinApp.minimizeAiChat()" class="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-slate-500 hover:text-slate-800 dark:text-neutral-400 dark:hover:text-white flex items-center justify-center transition-all hover:scale-105 active:scale-95 shadow-2xs cursor-pointer" title="Minimise AI Copilot into Dynamic Island">
+                  <span class="material-symbols-outlined text-[16px]">close_fullscreen</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Quick Suggestion Action Chips (Visible in Chat Mode) -->
+            <div id="chat-chips-container" class="flex items-center gap-2 py-2 overflow-x-auto shrink-0 scrollbar-none">
+              <button onclick="twinApp.sendPresetPrompt('Why is Level 2 HVAC surging and how can we mitigate it?')" class="rounded-full px-3.5 py-1.5 text-xs font-medium cursor-pointer transition-all hover:brightness-95 active:scale-95 shrink-0 bg-[#FFF4E8] dark:bg-[#2A180E] border border-[#FFE2C7] dark:border-[#522915] text-[#9A3412] dark:text-[#FDBA74] flex items-center gap-1.5">
+                <span>⚠️</span>
+                <span>Why is Level 2 surging?</span>
+              </button>
+              <button onclick="twinApp.sendPresetPrompt('How to maximize solar generation vs grid balance?')" class="rounded-full px-3.5 py-1.5 text-xs font-medium cursor-pointer transition-all hover:brightness-95 active:scale-95 shrink-0 bg-[#F0FDF4] dark:bg-[#052917] border border-[#DCFCE7] dark:border-[#0C542D] text-[#15803D] dark:text-[#86EFAC] flex items-center gap-1.5">
+                <span>☀️</span>
+                <span>Maximize solar vs grid</span>
+              </button>
+              <button onclick="twinApp.sendPresetPrompt('Shed 25 kW non-critical load on Level 2')" class="rounded-full px-3.5 py-1.5 text-xs font-medium cursor-pointer transition-all hover:brightness-95 active:scale-95 shrink-0 bg-[#F1F5F9] dark:bg-[#1E293B] border border-[#E2E8F0] dark:border-[#334155] text-[#475569] dark:text-[#CBD5E1] flex items-center gap-1.5">
+                <span>⚡</span>
+                <span>Shed 25 kW on L2</span>
+              </button>
+              <button onclick="twinApp.sendPresetPrompt('Calculate TNB C1 commercial tariff savings')" class="rounded-full px-3.5 py-1.5 text-xs font-medium cursor-pointer transition-all hover:brightness-95 active:scale-95 shrink-0 bg-[#F1F5F9] dark:bg-[#1E293B] border border-[#E2E8F0] dark:border-[#334155] text-[#475569] dark:text-[#CBD5E1] flex items-center gap-1.5">
+                <span>💰</span>
+                <span>TNB C1 savings</span>
+              </button>
+            </div>
+
+            <!-- Scrollable Chat Messages Container (Visible in Chat Mode) -->
+            <div id="chat-messages-container" class="flex-1 min-h-0 overflow-y-auto space-y-4 pr-1 py-3 font-sans text-[13.5px]">
+              <!-- Dynamically rendered by digital_twin_app.js -->
+            </div>
+
+            <!-- Agent Log Container (Visible in Agent Log Mode) -->
+            <div id="agent-log-container" class="hidden flex-1 min-h-0 flex flex-col pt-1 select-none">
+              <!-- Top Engine Status Header -->
+              <div class="flex items-center justify-between pb-2 mb-2 border-b border-slate-100 dark:border-neutral-800 text-[10.5px] text-neutral-500 dark:text-neutral-400 shrink-0">
+                <span class="flex items-center gap-1.5">
+                  <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                  <span class="font-bold text-[#1E2022] dark:text-white font-sans">Agent Engine:</span>
+                  <span class="text-emerald-600 dark:text-emerald-400 font-semibold font-mono">AUTONOMOUS DISPATCH</span>
+                </span>
+                <span class="font-mono text-[10px] text-slate-400">SCADA Loop • 12ms</span>
+              </div>
+
+              <!-- Filter Pills: All | ⚡ Doing | ✓ Done -->
+              <div class="flex items-center gap-1.5 pb-2 shrink-0 text-[11px] font-sans font-medium">
+                <button id="agent-filter-btn-all" onclick="twinApp.setAgentLogFilter('all')" class="px-2.5 py-1 rounded-full bg-[#1E2022] text-white dark:bg-white dark:text-neutral-900 font-bold transition-all shadow-2xs flex items-center gap-1 cursor-pointer">
+                  <span>All</span>
+                  <span id="agent-filter-count-all" class="text-[9.5px] opacity-80 font-mono">(11)</span>
+                </button>
+                <button id="agent-filter-btn-doing" onclick="twinApp.setAgentLogFilter('doing')" class="px-2.5 py-1 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-slate-600 dark:text-neutral-300 transition-all flex items-center gap-1 cursor-pointer">
+                  <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                  <span>Doing</span>
+                  <span id="agent-filter-count-doing" class="text-[9.5px] opacity-80 font-mono">(3)</span>
+                </button>
+                <button id="agent-filter-btn-done" onclick="twinApp.setAgentLogFilter('done')" class="px-2.5 py-1 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-slate-600 dark:text-neutral-300 transition-all flex items-center gap-1 cursor-pointer">
+                  <span class="material-symbols-outlined text-[12px] text-emerald-500">check_circle</span>
+                  <span>Done</span>
+                  <span id="agent-filter-count-done" class="text-[9.5px] opacity-80 font-mono">(8)</span>
+                </button>
+              </div>
+
+              <!-- Scrollable Agent Logs List (Form: time - content) -->
+              <div id="agent-log-list" class="flex-1 min-h-0 overflow-y-auto space-y-2 pr-1 text-[11px] leading-relaxed">
+                <!-- Injected dynamically by digital_twin_app.js -->
+              </div>
+
+              <!-- Bottom Action Bar for Agent Log -->
+              <div class="mt-auto pt-2.5 border-t border-slate-100 dark:border-neutral-800 flex items-center justify-between gap-2 text-[10px] shrink-0 font-sans">
+                <span class="text-slate-400 dark:text-neutral-500">Continuous SCADA Ingestion</span>
+                <div class="flex items-center gap-2">
+                  <button onclick="twinApp.triggerInstantDiagnosticScan()" class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-neutral-800 hover:bg-slate-200 dark:hover:bg-neutral-700 text-[#1E2022] dark:text-white font-semibold transition-colors flex items-center gap-1 cursor-pointer">
+                    <span class="material-symbols-outlined text-[12px] text-[#FF7A00]">refresh</span>
+                    <span>Run Audit</span>
+                  </button>
+                  <button onclick="twinApp.setAiViewMode('chat')" class="px-2.5 py-1 rounded-lg bg-[#FF7A00] hover:bg-[#ea6d00] text-white font-bold transition-all shadow-xs flex items-center gap-1 cursor-pointer">
+                    <span class="material-symbols-outlined text-[12px]">chat</span>
+                    <span>Chat with AI</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Chat Input Bar (Rounded-full Pill with Dark Circular Up-Arrow Button Inside) -->
+            <form id="chat-input-form" onsubmit="twinApp.handleChatFormSubmit(event)" class="mt-auto pt-3 shrink-0">
+              <div class="w-full bg-[#F4F6F9] dark:bg-[#18202F] border border-[#E2E8F0] dark:border-neutral-700/80 rounded-full px-4 sm:px-5 py-2 flex items-center gap-3">
+                <input
+                  id="chat-user-input"
+                  type="text"
+                  placeholder="Ask Copilot about energy optimization, solar yield, or anomalies..."
+                  class="flex-1 bg-transparent text-sm text-[#111827] dark:text-neutral-100 placeholder:text-neutral-400 outline-none font-sans"
+                >
+                <button type="submit" class="w-9 h-9 rounded-full bg-[#181A1D] hover:bg-neutral-800 text-white flex items-center justify-center transition-transform active:scale-95 shrink-0 shadow-sm" title="Send Query">
+                  <svg viewBox="0 0 24 24" class="w-4 h-4 text-white" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="12" y1="19" x2="12" y2="5"></line>
+                    <polyline points="5 12 12 5 19 12"></polyline>
+                  </svg>
+                </button>
+              </div>
+            </form>
+
+          </div>
+
+          <!-- =========================================================== -->
+          <!-- MINIMISED STATE: TOWNSHIP ALERTS TAB IN RIGHT COLUMN       -->
+          <!-- =========================================================== -->
+          <div id="twin-ai-alerts-tab" class="hidden flex-1 min-h-0 flex flex-col rounded-3xl border border-slate-200/90 dark:border-neutral-800 bg-white dark:bg-[#121824] shadow-sm p-4 overflow-hidden transition-all">
+            <!-- Header: Title, Count Badge, Expand Button -->
+            <div class="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-neutral-800/80 shrink-0">
+              <div class="flex items-center gap-2.5">
+                <div class="w-7 h-7 rounded-lg bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center">
+                  <span class="material-symbols-outlined text-[17px]">warning</span>
+                </div>
+                <div>
+                  <div class="flex items-center gap-2">
+                    <h3 class="text-xs font-bold text-[#1E2022] dark:text-white font-sans uppercase tracking-wider">
+                      Township Alerts
+                    </h3>
+                    <span id="alerts-count-badge" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 dark:bg-rose-950/80 text-rose-700 dark:text-rose-300 font-mono">
+                      4 Active
+                    </span>
+                  </div>
+                  <p class="text-[10px] text-[#71767B] dark:text-slate-400 font-mono">All Towers &amp; Levels • Real-time Anomaly Monitor</p>
+                </div>
+              </div>
+
+              <!-- Expand to Full AI Chat Button -->
+              <button onclick="twinApp.restoreAiChat()" class="px-2.5 py-1 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-slate-600 hover:text-slate-900 dark:text-neutral-300 dark:hover:text-white text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer shadow-2xs" title="Expand AI Copilot Chat">
+                <span>Expand Chat</span>
+                <span class="material-symbols-outlined text-[14px]">open_in_full</span>
+              </button>
+            </div>
+
+            <!-- Scrollable List of All Alerts across all towers with "Ask AI" buttons -->
+            <div id="alerts-tab-list" class="flex-1 min-h-0 overflow-y-auto space-y-2.5 py-3 pr-1 font-sans text-xs">
+              <!-- Dynamically rendered by digital_twin_app.js -->
+            </div>
+          </div>
+
+        </section>
+
+      </main>
+
+    </div>
+  </div>
+
+  <!-- =================================================================== -->
+  <!-- TOAST NOTIFICATION CONTAINER                                        -->
+  <!-- =================================================================== -->
+  <div id="velora-toast" class="fixed bottom-6 right-6 z-50 transform translate-y-4 opacity-0 transition-all duration-200 pointer-events-none">
+    <div class="bg-[#1E2022] text-white px-4 py-2.5 rounded-xl shadow-xl text-xs font-medium flex items-center gap-2">
+      <span class="material-symbols-outlined text-sm text-[#FF7A00]">info</span>
+      <span id="velora-toast-text">Notification</span>
+    </div>
+  </div>
+
+  <!-- =================================================================== -->
+  <!-- MORPH TRANSITION ELEMENT FOR AI CHAT MINIMISE / RESTORE             -->
+  <!-- =================================================================== -->
+  <div id="ai-chat-morph-proxy" class="fixed pointer-events-none z-50 transition-all duration-[420ms] ease-[cubic-bezier(0.16,1,0.3,1)] opacity-0 border border-white/20 shadow-2xl backdrop-blur-xl hidden">
+    <!-- Inner Morph Branding -->
+    <div class="w-full h-full flex items-center justify-center p-3 text-white overflow-hidden rounded-[inherit]">
+      <div id="morph-island-content" class="flex items-center gap-2 opacity-0 transition-opacity duration-200">
+        <span class="w-3.5 h-3.5 flex items-center justify-center text-[#FF7A00]">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor">
+            <circle cx="12" cy="3" r="2" /><circle cx="12" cy="21" r="2" />
+            <circle cx="3" cy="12" r="2" /><circle cx="21" cy="12" r="2" />
+            <circle cx="5.6" cy="5.6" r="2" /><circle cx="18.4" cy="18.4" r="2" />
+            <circle cx="5.6" cy="18.4" r="2" /><circle cx="18.4" cy="5.6" r="2" />
+          </svg>
+        </span>
+        <span class="text-xs font-semibold text-white tracking-tight font-sans">EnergiOS AI</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="src/js/dynamic_island.js"></script>
+  <script src="src/js/digital_twin_app.js"></script>
+</body>
+</html>

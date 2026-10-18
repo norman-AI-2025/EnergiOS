@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EnergiOS — System Preferences & Agent Settings</title>
+  <meta name="energios-api-base-url" content="http://127.0.0.1:8000">
+
+  <!-- Typography & Icons -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            velora: {
+              bg: '#FAF8F5',
+              card: '#FFFFFF',
+              pill: '#F4F0E8',
+              orange: '#FF7A00',
+              yellow: '#FACC15',
+              green: '#22C55E',
+              dark: '#1E2022',
+              muted: '#71767B',
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['Space Grotesk', 'monospace'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Theme Manager (Immediately executes to prevent theme flash) -->
+  <script src="src/js/theme.js"></script>
+
+  <!-- Exact Velora Stylesheet -->
+  <link rel="stylesheet" href="src/css/velora_exact.css">
+
+  <!-- Verified Backend & BDG2 Telemetry Sync -->
+  <script src="src/data/bdg2_data.js"></script>
+  <script src="src/js/api.js"></script>
+  <script src="src/data/township_data.js"></script>
+</head>
+
+<body class="bg-[#FAF8F5] dark:bg-[#0A0E17] text-[#1E2022] dark:text-[#E2E8F0] antialiased min-h-screen flex flex-col p-6 lg:p-8 selection:bg-orange-100 selection:text-orange-900 transition-colors duration-200">
+
+  <!-- =================================================================== -->
+  <!-- APPLE DYNAMIC ISLAND (1:1 Exact Replica of dynamic_island.jpeg)     -->
+  <!-- =================================================================== -->
+  <div id="dynamic-island" class="fixed top-3.5 left-1/2 -translate-x-1/2 z-50 transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] select-none">
+    
+    <!-- Collapsed Pill (Apple Dynamic Island State) -->
+    <div id="island-collapsed" onclick="dynamicIsland.expand()" class="h-9 px-4 rounded-full bg-black text-white flex items-center justify-between gap-3.5 shadow-xl shadow-black/40 border border-white/10 cursor-pointer hover:scale-[1.03] transition-all" title="Click to open EnergiOS AI Copilot & Logs">
+      <div class="flex items-center gap-2">
+        <span class="w-3.5 h-3.5 flex items-center justify-center text-[#FF7A00]">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor">
+            <circle cx="12" cy="3" r="2" /><circle cx="12" cy="21" r="2" />
+            <circle cx="3" cy="12" r="2" /><circle cx="21" cy="12" r="2" />
+            <circle cx="5.6" cy="5.6" r="2" /><circle cx="18.4" cy="18.4" r="2" />
+            <circle cx="5.6" cy="18.4" r="2" /><circle cx="18.4" cy="5.6" r="2" />
+          </svg>
+        </span>
+        <span class="text-xs font-semibold text-white tracking-tight font-sans">EnergiOS AI</span>
+      </div>
+
+      <!-- iPhone Camera Notch Hole -->
+      <span class="w-2.5 h-2.5 rounded-full bg-[#1A1B1E] border border-white/10"></span>
+    </div>
+
+    <!-- Expanded Dynamic Island -->
+    <div id="island-expanded" class="hidden w-[760px] max-w-[94vw] bg-[#000000] text-white rounded-[36px] shadow-2xl shadow-black/90 border border-white/10 p-6 pt-3 relative overflow-hidden backdrop-blur-2xl">
+      
+      <!-- Top Center: iPhone Physical Camera Cutout Notch -->
+      <div class="w-28 h-5 rounded-full bg-[#121316] mx-auto mb-3 flex items-center justify-center gap-2.5 border border-white/5">
+        <div class="w-2.5 h-2.5 rounded-full bg-[#070709] border border-blue-900/50 flex items-center justify-center">
+          <span class="w-1 h-1 rounded-full bg-blue-500/50"></span>
+        </div>
+        <span class="w-1.5 h-1.5 rounded-full bg-[#050507]"></span>
+      </div>
+
+      <!-- Header Row inside Island -->
+      <div class="flex items-center justify-between pb-3 px-1 border-b border-white/10">
+        <div class="flex items-center gap-2.5">
+          <div class="w-6 h-6 flex items-center justify-center text-[#FF7A00]">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
+              <circle cx="12" cy="3" r="2" /><circle cx="12" cy="21" r="2" />
+              <circle cx="3" cy="12" r="2" /><circle cx="21" cy="12" r="2" />
+              <circle cx="5.6" cy="5.6" r="2" /><circle cx="18.4" cy="18.4" r="2" />
+              <circle cx="5.6" cy="18.4" r="2" /><circle cx="18.4" cy="5.6" r="2" />
+              <line x1="12" y1="5" x2="12" y2="19" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" />
+              <line x1="5" y1="12" x2="19" y2="12" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" />
+              <line x1="7" y1="7" x2="17" y2="17" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" />
+              <line x1="7" y1="17" x2="17" y2="7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" />
+            </svg>
+          </div>
+          <span class="text-sm font-bold tracking-tight text-white font-sans">EnergiOS AI Copilot</span>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button onclick="dynamicIsland.collapse()" class="w-7 h-7 rounded-full bg-[#1C1D21] hover:bg-neutral-800 text-neutral-400 hover:text-white flex items-center justify-center text-xs transition-colors" title="Collapse Island">
+            <span class="material-symbols-outlined text-[16px]">close</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Two Columns Body -->
+      <div class="grid grid-cols-1 md:grid-cols-12 gap-6 pt-4">
+
+        <!-- Left Column: Chat Assistant -->
+        <div class="md:col-span-7 flex flex-col justify-between space-y-3">
+          <div>
+            <span class="text-xs font-semibold text-neutral-400 block mb-2 font-sans">Preferences Assistant</span>
+            <div class="bg-[#1C1D21] border border-white/5 rounded-2xl p-4 text-xs text-neutral-200 leading-relaxed shadow-sm">
+              <p id="island-agent-bubble-text">
+                System preferences active. You can calibrate <b>AI Copilot autonomy</b>, set statistical <b>MAD anomaly thresholds</b>, and configure regional <b>TNB utility tariffs</b>. Changes persist to local storage.
+              </p>
+            </div>
+          </div>
+
+          <!-- Quick Action Prompts -->
+          <div class="flex items-center gap-1.5 flex-wrap pt-0.5">
+            <button onclick="settingsManager.resetDefaults()" class="px-2.5 py-1 rounded-full text-[10px] font-medium bg-[#1C1D21] hover:bg-[#282A30] text-neutral-300 border border-white/5 transition-all">
+              ↺ Reset to Defaults
+            </button>
+            <button onclick="settingsManager.saveSettings()" class="px-2.5 py-1 rounded-full text-[10px] font-medium bg-[#1C1D21] hover:bg-[#282A30] text-neutral-300 border border-white/5 transition-all">
+              💾 Save All Changes
+            </button>
+          </div>
+
+          <!-- Input Bar -->
+          <form onsubmit="dynamicIsland.handleUserSubmit(event)" class="mt-2 flex items-center gap-2 bg-[#121316] border border-white/10 rounded-full px-3.5 py-2 shadow-inner">
+            <div class="flex items-center gap-1 text-neutral-500 pl-1">
+              <span class="w-1.5 h-1.5 rounded-full bg-neutral-500"></span>
+              <span class="w-1.5 h-1.5 rounded-full bg-neutral-500"></span>
+              <span class="w-1.5 h-1.5 rounded-full bg-neutral-500"></span>
+            </div>
+            <input id="island-user-input" type="text" placeholder="Ask about tariff multipliers or anomaly gates..." class="bg-transparent text-xs text-white placeholder:text-neutral-500 outline-none flex-1 px-1 font-sans">
+            <button type="submit" class="w-6 h-6 rounded-full bg-white text-black flex items-center justify-center hover:bg-neutral-200 transition-colors shrink-0" title="Send">
+              <span class="material-symbols-outlined text-[14px]">arrow_upward</span>
+            </button>
+          </form>
+        </div>
+
+        <!-- Right Column: Agent Logs -->
+        <div class="md:col-span-5 flex flex-col justify-between border-t md:border-t-0 md:border-l border-white/10 md:pl-5 pt-3 md:pt-0">
+          <div>
+            <span class="text-xs font-semibold text-neutral-400 block mb-2 font-sans">System Diagnostics & Storage</span>
+            <div id="island-agent-logs-list" class="space-y-2.5 font-mono text-[11px] max-h-[190px] overflow-y-auto pr-1">
+              <div class="flex items-start gap-1.5 leading-snug">
+                <span class="text-neutral-500 whitespace-nowrap">• 14:20:00 —</span>
+                <span class="text-neutral-300">Preferences module initialized (localStorage sync active)</span>
+              </div>
+              <div class="flex items-start gap-1.5 leading-snug">
+                <span class="text-neutral-500 whitespace-nowrap">• 14:20:15 —</span>
+                <span class="text-neutral-300">TNB C1 Commercial Tariff matrices loaded <span class="text-emerald-400">✅</span></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+
+  <!-- =================================================================== -->
+  <!-- TOP NAVIGATION BAR                                                  -->
+  <!-- =================================================================== -->
+  <header class="w-full flex items-center justify-between pb-6 max-w-[1540px] mx-auto relative z-10">
+    <a href="index.html" class="flex items-center gap-2.5 group">
+      <div class="w-7 h-7 flex items-center justify-center text-[#FF7A00]">
+        <svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor">
+          <circle cx="12" cy="3" r="2" /><circle cx="12" cy="21" r="2" />
+          <circle cx="3" cy="12" r="2" /><circle cx="21" cy="12" r="2" />
+          <circle cx="5.6" cy="5.6" r="2" /><circle cx="18.4" cy="18.4" r="2" />
+          <circle cx="5.6" cy="18.4" r="2" /><circle cx="18.4" cy="5.6" r="2" />
+          <line x1="12" y1="5" x2="12" y2="19" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" />
+          <line x1="5" y1="12" x2="19" y2="12" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" />
+          <line x1="7" y1="7" x2="17" y2="17" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" />
+          <line x1="7" y1="17" x2="17" y2="7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" />
+        </svg>
+      </div>
+      <span class="text-xl font-bold tracking-tight text-[#1E2022] font-sans">EnergiOS</span>
+    </a>
+
+    <!-- Center Space Reserved for Dynamic Island -->
+    <div class="hidden sm:block w-32"></div>
+
+    <!-- Right Controls: Status & Save Button -->
+    <div class="flex items-center gap-3 text-[#71767B]">
+      
+      <!-- Backend & Supabase Live Status Pill -->
+      <div id="api-status-pill" onclick="settingsManager.testConnection(true)" class="flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-semibold transition-all cursor-pointer bg-emerald-50 dark:bg-emerald-950/60 border-emerald-200/80 dark:border-emerald-800/60 text-emerald-800 dark:text-emerald-300 shadow-2xs hover:scale-105" title="Click to test API & Supabase connection">
+        <span id="api-status-dot" class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+        <span id="api-status-text">Supabase Live Connected</span>
+      </div>
+
+      <!-- Save Status Pill -->
+      <div class="hidden sm:flex items-center gap-2 px-3 py-1 rounded-full bg-white dark:bg-[#121824] border border-[#EBE7DF] dark:border-white/10 text-xs font-mono shadow-2xs">
+        <span id="save-status-dot" class="w-2 h-2 rounded-full bg-[#22C55E]"></span>
+        <span id="save-status-text" class="text-[#71767B] dark:text-slate-300 font-medium">All Changes Saved</span>
+      </div>
+
+      <!-- Theme Toggle Button -->
+      <button id="theme-toggle-btn" onclick="themeManager.toggle()" class="w-8 h-8 rounded-full bg-white dark:bg-[#162030] border border-[#EBE7DF] dark:border-white/10 flex items-center justify-center text-[#71767B] dark:text-[#94A3B8] hover:text-[#1E2022] dark:hover:text-white transition-all shadow-2xs hover:scale-105 active:scale-95" title="Toggle Dark / Light Mode">
+        <span class="material-symbols-outlined text-[18px] theme-icon-moon">dark_mode</span>
+        <span class="material-symbols-outlined text-[18px] theme-icon-sun hidden">light_mode</span>
+      </button>
+
+      <!-- Save Changes Primary Button -->
+      <button type="button" id="btn-save-settings" onclick="window.settingsManager?.saveSettings()" class="px-4 py-1.5 rounded-full bg-[#1E2022] hover:bg-black dark:bg-white dark:hover:bg-slate-200 text-white dark:text-[#1E2022] text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all hover:scale-[1.02] active:scale-[0.98]">
+        <span id="btn-save-icon" class="material-symbols-outlined text-[16px]">check</span>
+        <span id="btn-save-label">Save Changes</span>
+      </button>
+
+      <!-- Profile Avatar -->
+      <div class="w-8 h-8 rounded-full overflow-hidden border border-slate-200 cursor-pointer shadow-xs" title="Operator Profile">
+        <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&h=120&q=80" alt="Avatar" class="w-full h-full object-cover">
+      </div>
+    </div>
+  </header>
+
+  <!-- =================================================================== -->
+  <!-- MAIN APP CONTAINER WITH LEFT FLOATING SIDEBAR + SETTINGS WORKSPACE  -->
+  <!-- =================================================================== -->
+  <div class="flex-1 w-full max-w-[1540px] mx-auto flex items-start gap-6">
+
+    <!-- FLOATING VERTICAL PILL NAVIGATION SIDEBAR -->
+    <aside class="velora-sidebar hidden md:flex shrink-0">
+      <a href="index.html" class="velora-nav-btn" title="Dashboard Overview">
+        <span class="material-symbols-outlined text-[19px]">grid_view</span>
+      </a>
+      <a href="digital-twin.html" class="velora-nav-btn" title="Spatial Digital Twin">
+        <span class="material-symbols-outlined text-[19px]">domain</span>
+      </a>
+      <!-- Active Settings Button -->
+      <a href="settings.html" class="velora-nav-btn active" title="System Settings">
+        <span class="material-symbols-outlined text-[19px]">settings</span>
+      </a>
+      <button class="velora-nav-btn" title="Provenance & Reports" onclick="settingsManager.showToast('Settings persist to browser localStorage')">
+        <span class="material-symbols-outlined text-[19px]">description</span>
+      </button>
+    </aside>
+
+    <!-- MAIN SETTINGS WORKSPACE (Apple-Inspired Grouped Bento Cards) -->
+    <main class="flex-1 min-w-0 space-y-6 pb-12">
+
+      <!-- Page Header & Breadcrumbs -->
+      <div class="pt-1">
+        <div class="flex items-center gap-2 text-xs text-[#71767B] font-mono">
+          <a href="index.html" class="hover:underline">Home</a>
+          <span>/</span>
+          <span>System Preferences</span>
+        </div>
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mt-1">
+          <div>
+            <h1 class="text-2xl lg:text-3xl font-extrabold tracking-tight text-[#1E2022] font-sans">
+              System Settings & Preferences
+            </h1>
+            <p class="text-xs text-[#71767B] font-medium mt-1">
+              Configure AI Copilot autonomy, calibrate statistical anomaly gates, and define utility tariff matrices.
+            </p>
+          </div>
+
+          <!-- Quick Reset Link -->
+          <button type="button" id="btn-reset-defaults" onclick="window.settingsManager?.resetDefaults()" class="self-start sm:self-auto text-xs font-semibold text-[#71767B] hover:text-[#FF7A00] flex items-center gap-1 transition-colors">
+            <span class="material-symbols-outlined text-[15px]">restart_alt</span>
+            <span>Reset to Defaults</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- =============================================================== -->
+      <!-- SECTION 0: APPEARANCE & VISUAL THEME                            -->
+      <!-- =============================================================== -->
+      <section class="space-y-3">
+        <!-- Section Header with Apple-Style Icon Badge -->
+        <div class="flex items-center gap-2.5">
+          <div class="w-7 h-7 rounded-lg bg-indigo-500 text-white flex items-center justify-center shadow-xs">
+            <span class="material-symbols-outlined text-[17px]">palette</span>
+          </div>
+          <div>
+            <h2 class="text-sm font-bold text-[#1E2022] font-sans">Appearance & Visual Theme</h2>
+            <p class="text-[11px] text-[#71767B]">Select interface theme: Velora Warm Sand (Light), Velora Obsidian (Dark), or follow system OS</p>
+          </div>
+        </div>
+
+        <!-- Grouped Card Container with 3 Theme Cards -->
+        <div class="velora-card p-5 border border-[#EBE7DF] shadow-xs">
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            
+            <!-- Option 1: Light Mode -->
+            <button type="button" data-theme="light" class="theme-option-btn group relative flex flex-col p-4 rounded-2xl border border-[#EBE7DF] hover:border-slate-300 transition-all text-left bg-[#FAF8F5] cursor-pointer">
+              <!-- Visual Mockup Thumbnail -->
+              <div class="w-full h-24 rounded-xl bg-[#FAF8F5] border border-black/10 p-2.5 flex flex-col justify-between shadow-inner mb-3 overflow-hidden">
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-1.5">
+                    <span class="w-2.5 h-2.5 rounded-full bg-[#FF7A00]"></span>
+                    <span class="w-14 h-2 rounded-full bg-black/10"></span>
+                  </div>
+                  <span class="w-3.5 h-3.5 rounded-full bg-black/5"></span>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                  <div class="h-10 rounded-lg bg-white border border-black/5 p-1.5 flex flex-col justify-between shadow-2xs">
+                    <span class="w-6 h-1.5 rounded-full bg-black/20"></span>
+                    <span class="w-10 h-2.5 rounded-full bg-[#FF7A00]/80"></span>
+                  </div>
+                  <div class="h-10 rounded-lg bg-white border border-black/5 p-1.5 flex flex-col justify-between shadow-2xs">
+                    <span class="w-6 h-1.5 rounded-full bg-black/20"></span>
+                    <span class="w-10 h-2.5 rounded-full bg-emerald-500/80"></span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Title & Checkmark -->
+              <div class="flex items-center justify-between w-full">
+                <div>
+                  <span class="text-xs font-bold text-[#1E2022] block">Velora Light</span>
+                  <span class="text-[10px] text-[#71767B]">Warm Sand Clean Paper</span>
+                </div>
+                <span class="material-symbols-outlined text-[18px] text-[#FF7A00] theme-check-icon hidden">check_circle</span>
+              </div>
+            </button>
+
+            <!-- Option 2: Dark Mode -->
+            <button type="button" data-theme="dark" class="theme-option-btn group relative flex flex-col p-4 rounded-2xl border border-[#EBE7DF] hover:border-slate-600 transition-all text-left bg-[#0A0E17] text-white cursor-pointer">
+              <!-- Visual Mockup Thumbnail -->
+              <div class="w-full h-24 rounded-xl bg-[#0A0E17] border border-white/10 p-2.5 flex flex-col justify-between shadow-inner mb-3 overflow-hidden">
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-1.5">
+                    <span class="w-2.5 h-2.5 rounded-full bg-[#FF7A00]"></span>
+                    <span class="w-14 h-2 rounded-full bg-white/20"></span>
+                  </div>
+                  <span class="w-3.5 h-3.5 rounded-full bg-white/10"></span>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                  <div class="h-10 rounded-lg bg-[#111726] border border-white/10 p-1.5 flex flex-col justify-between shadow-2xs">
+                    <span class="w-6 h-1.5 rounded-full bg-white/25"></span>
+                    <span class="w-10 h-2.5 rounded-full bg-[#FF7A00]"></span>
+                  </div>
+                  <div class="h-10 rounded-lg bg-[#111726] border border-white/10 p-1.5 flex flex-col justify-between shadow-2xs">
+                    <span class="w-6 h-1.5 rounded-full bg-white/25"></span>
+                    <span class="w-10 h-2.5 rounded-full bg-emerald-400"></span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Title & Checkmark -->
+              <div class="flex items-center justify-between w-full">
+                <div>
+                  <span class="text-xs font-bold text-white block">Velora Dark</span>
+                  <span class="text-[10px] text-slate-400">Obsidian & Midnight Sky</span>
+                </div>
+                <span class="material-symbols-outlined text-[18px] text-[#FF7A00] theme-check-icon hidden">check_circle</span>
+              </div>
+            </button>
+
+            <!-- Option 3: Auto System -->
+            <button type="button" data-theme="system" class="theme-option-btn group relative flex flex-col p-4 rounded-2xl border border-[#EBE7DF] hover:border-slate-400 transition-all text-left bg-gradient-to-r from-[#FAF8F5] to-[#0A0E17] cursor-pointer">
+              <!-- Visual Mockup Thumbnail -->
+              <div class="w-full h-24 rounded-xl bg-gradient-to-r from-[#FAF8F5] via-[#CBD5E1] to-[#0A0E17] border border-black/10 p-2.5 flex flex-col justify-between shadow-inner mb-3 overflow-hidden">
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-1.5">
+                    <span class="w-2.5 h-2.5 rounded-full bg-[#FF7A00]"></span>
+                    <span class="w-12 h-2 rounded-full bg-black/20"></span>
+                  </div>
+                  <span class="text-[9px] font-mono font-bold text-slate-700 bg-white/90 px-1 rounded">AUTO</span>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                  <div class="h-10 rounded-lg bg-white/90 border border-black/5 p-1.5 flex flex-col justify-between shadow-2xs">
+                    <span class="w-6 h-1.5 rounded-full bg-black/20"></span>
+                    <span class="w-10 h-2.5 rounded-full bg-amber-500"></span>
+                  </div>
+                  <div class="h-10 rounded-lg bg-[#111726]/90 border border-white/10 p-1.5 flex flex-col justify-between shadow-2xs">
+                    <span class="w-6 h-1.5 rounded-full bg-white/30"></span>
+                    <span class="w-10 h-2.5 rounded-full bg-emerald-400"></span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Title & Checkmark -->
+              <div class="flex items-center justify-between w-full">
+                <div>
+                  <span class="text-xs font-bold text-[#1E2022] dark:text-white block">Auto (System)</span>
+                  <span class="text-[10px] text-[#71767B] dark:text-slate-400">Match macOS / Windows</span>
+                </div>
+                <span class="material-symbols-outlined text-[18px] text-[#FF7A00] theme-check-icon hidden">check_circle</span>
+              </div>
+            </button>
+
+          </div>
+        </div>
+      </section>
+
+      <!-- =============================================================== -->
+      <!-- SECTION 1: AI AGENT & DYNAMIC ISLAND PREFERENCES                -->
+      <!-- =============================================================== -->
+      <section class="space-y-3">
+        <!-- Section Header with Apple-Style Icon Badge -->
+        <div class="flex items-center gap-2.5">
+          <div class="w-7 h-7 rounded-lg bg-orange-500 text-white flex items-center justify-center shadow-xs">
+            <span class="material-symbols-outlined text-[17px]">smart_toy</span>
+          </div>
+          <div>
+            <h2 class="text-sm font-bold text-[#1E2022] font-sans">AI Agent & Dynamic Island Preferences</h2>
+            <p class="text-[11px] text-[#71767B]">Configure copilot autonomy level, polling heartbeat, and proactive advisory stream</p>
+          </div>
+        </div>
+
+        <!-- Grouped Card Container -->
+        <div class="velora-card p-0 overflow-hidden border border-[#EBE7DF] divide-y divide-[#F4F0E8] shadow-xs">
+          
+          <!-- Row 1: Operation Mode (Autonomous vs Manual) -->
+          <div class="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div class="max-w-xl">
+              <span class="text-sm font-bold text-[#1E2022] block">Copilot Operation Mode</span>
+              <p class="text-xs text-[#71767B] mt-0.5 leading-relaxed">
+                Choose whether EnergiOS AI proactively analyzes building baseloads and logs real-time insights, or operates only on-demand when explicitly engaged.
+              </p>
+            </div>
+            
+            <!-- Segmented Control Pill -->
+            <div class="velora-pill-container shrink-0">
+              <button type="button" data-value="autonomous" class="velora-pill op-mode-btn active bg-white text-[#1E2022] shadow-xs font-semibold flex items-center gap-1.5">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                <span>Autonomous</span>
+              </button>
+              <button type="button" data-value="manual" class="velora-pill op-mode-btn flex items-center gap-1.5">
+                <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                <span>On-Demand Only</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Row 2: Telemetry Polling Interval -->
+          <div class="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div class="max-w-xl">
+              <span class="text-sm font-bold text-[#1E2022] block">Telemetry Polling Interval</span>
+              <p class="text-xs text-[#71767B] mt-0.5 leading-relaxed">
+                Frequency at which the background copilot queries building meters and SCADA nodes for updated consumption and chiller loops.
+              </p>
+            </div>
+
+            <!-- Segmented Control Pill: 10s, 30s, 1m -->
+            <div class="velora-pill-container shrink-0">
+              <button type="button" data-value="10s" class="velora-pill poll-interval-btn">
+                10s <span class="text-[10px] font-mono opacity-60">(High)</span>
+              </button>
+              <button type="button" data-value="30s" class="velora-pill poll-interval-btn active bg-white text-[#1E2022] shadow-xs font-semibold">
+                30s <span class="text-[10px] font-mono opacity-60">(Default)</span>
+              </button>
+              <button type="button" data-value="1m" class="velora-pill poll-interval-btn">
+                1m <span class="text-[10px] font-mono opacity-60">(Eco)</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Row 3: Autonomous Insights Toggle -->
+          <div class="p-5 flex items-center justify-between gap-4">
+            <div class="max-w-xl">
+              <span class="text-sm font-bold text-[#1E2022] block">Proactive Optimization Insights</span>
+              <p class="text-xs text-[#71767B] mt-0.5 leading-relaxed">
+                Allow the agent to generate peak-shaving recommendations, setpoint adjustments, and energy arbitrage tips directly inside the Dynamic Island chat.
+              </p>
+            </div>
+
+            <!-- iOS Style Toggle Switch -->
+            <label class="relative inline-flex items-center cursor-pointer select-none shrink-0">
+              <input type="checkbox" id="toggle-autonomous-insights" class="sr-only peer" checked>
+              <div class="w-11 h-6 bg-[#E5E5EA] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all after:shadow-sm peer-checked:bg-[#22C55E]"></div>
+            </label>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- =============================================================== -->
+      <!-- SECTION 2: ANOMALY & ALERT THRESHOLDS                           -->
+      <!-- =============================================================== -->
+      <section class="space-y-3">
+        <!-- Section Header with Apple-Style Icon Badge -->
+        <div class="flex items-center gap-2.5">
+          <div class="w-7 h-7 rounded-lg bg-rose-500 text-white flex items-center justify-center shadow-xs">
+            <span class="material-symbols-outlined text-[17px]">warning</span>
+          </div>
+          <div>
+            <h2 class="text-sm font-bold text-[#1E2022] font-sans">Anomaly & Alert Thresholds</h2>
+            <p class="text-[11px] text-[#71767B]">Calibrate BDG2 statistical deviation gates and notification dispatch channels</p>
+          </div>
+        </div>
+
+        <!-- Grouped Card Container -->
+        <div class="velora-card p-0 overflow-hidden border border-[#EBE7DF] divide-y divide-[#F4F0E8] shadow-xs">
+
+          <!-- Row 1: Detection Sensitivity (Low, Balanced, High) -->
+          <div class="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div class="max-w-xl">
+              <span class="text-sm font-bold text-[#1E2022] block">Statistical Detection Sensitivity</span>
+              <p class="text-xs text-[#71767B] mt-0.5 leading-relaxed">
+                Controls the Median Absolute Deviation (MAD) multiplier used to flag unexpected meter spikes and HVAC auxiliary drifts.
+              </p>
+            </div>
+
+            <!-- 3-Step Segmented Control -->
+            <div class="velora-pill-container shrink-0">
+              <button type="button" data-value="low" class="velora-pill sensitivity-btn">
+                Low <span class="text-[10px] font-mono opacity-60">(8× MAD)</span>
+              </button>
+              <button type="button" data-value="balanced" class="velora-pill sensitivity-btn active bg-white text-[#1E2022] shadow-xs font-semibold">
+                Balanced <span class="text-[10px] font-mono opacity-60">(6× MAD)</span>
+              </button>
+              <button type="button" data-value="high" class="velora-pill sensitivity-btn">
+                High <span class="text-[10px] font-mono opacity-60">(4× MAD)</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Row 2: Dynamic Island Alert Badges -->
+          <div class="p-5 flex items-center justify-between gap-4">
+            <div class="max-w-xl">
+              <span class="text-sm font-bold text-[#1E2022] block">Dynamic Island Alert Badges</span>
+              <p class="text-xs text-[#71767B] mt-0.5 leading-relaxed">
+                Display pulsing warning badges and active severity indicators on the top Dynamic Island pill when anomalies are detected.
+              </p>
+            </div>
+
+            <!-- iOS Style Toggle Switch -->
+            <label class="relative inline-flex items-center cursor-pointer select-none shrink-0">
+              <input type="checkbox" id="toggle-island-alert-badges" class="sr-only peer" checked>
+              <div class="w-11 h-6 bg-[#E5E5EA] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all after:shadow-sm peer-checked:bg-[#22C55E]"></div>
+            </label>
+          </div>
+
+          <!-- Row 3: Notification Dispatch Channels Group -->
+          <div class="p-5 space-y-3">
+            <span class="text-sm font-bold text-[#1E2022] block">Notification Dispatch Channels</span>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
+              
+              <!-- In-App Push & Toast -->
+              <div class="p-3.5 rounded-2xl bg-[#FAF8F5] border border-[#EBE7DF] flex items-center justify-between gap-3">
+                <div class="flex items-center gap-2.5">
+                  <span class="material-symbols-outlined text-[20px] text-[#FF7A00]">notifications_active</span>
+                  <div>
+                    <span class="text-xs font-bold text-[#1E2022] block">In-App Banners</span>
+                    <span class="text-[10px] text-[#71767B]">Real-time visual toasts</span>
+                  </div>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer select-none shrink-0">
+                  <input type="checkbox" id="toggle-notify-inapp" class="sr-only peer" checked>
+                  <div class="w-9 h-5 bg-[#E5E5EA] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all after:shadow-sm peer-checked:bg-[#22C55E]"></div>
+                </label>
+              </div>
+
+              <!-- Email Digest Reports -->
+              <div class="p-3.5 rounded-2xl bg-[#FAF8F5] border border-[#EBE7DF] flex items-center justify-between gap-3">
+                <div class="flex items-center gap-2.5">
+                  <span class="material-symbols-outlined text-[20px] text-sky-600">mail</span>
+                  <div>
+                    <span class="text-xs font-bold text-[#1E2022] block">Email Digest</span>
+                    <span class="text-[10px] text-[#71767B]">Shift summary reports</span>
+                  </div>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer select-none shrink-0">
+                  <input type="checkbox" id="toggle-notify-email" class="sr-only peer" checked>
+                  <div class="w-9 h-5 bg-[#E5E5EA] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all after:shadow-sm peer-checked:bg-[#22C55E]"></div>
+                </label>
+              </div>
+
+              <!-- BMS SCADA Webhook -->
+              <div class="p-3.5 rounded-2xl bg-[#FAF8F5] border border-[#EBE7DF] flex items-center justify-between gap-3">
+                <div class="flex items-center gap-2.5">
+                  <span class="material-symbols-outlined text-[20px] text-emerald-600">webhook</span>
+                  <div>
+                    <span class="text-xs font-bold text-[#1E2022] block">BMS Webhook</span>
+                    <span class="text-[10px] text-[#71767B]">BACnet/MQTT dispatch</span>
+                  </div>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer select-none shrink-0">
+                  <input type="checkbox" id="toggle-notify-webhook" class="sr-only peer">
+                  <div class="w-9 h-5 bg-[#E5E5EA] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all after:shadow-sm peer-checked:bg-[#22C55E]"></div>
+                </label>
+              </div>
+
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- =============================================================== -->
+      <!-- SECTION 3: BUILDING CONTEXT & UTILITY RATES                     -->
+      <!-- =============================================================== -->
+      <section class="space-y-3">
+        <!-- Section Header with Apple-Style Icon Badge -->
+        <div class="flex items-center gap-2.5">
+          <div class="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center shadow-xs">
+            <span class="material-symbols-outlined text-[17px]">apartment</span>
+          </div>
+          <div>
+            <h2 class="text-sm font-bold text-[#1E2022] font-sans">Building Context & Utility Rates</h2>
+            <p class="text-[11px] text-[#71767B]">Default cohort asset, Malaysian TNB / regional tariff structures, and benchmark visibility</p>
+          </div>
+        </div>
+
+        <!-- Grouped Card Container -->
+        <div class="velora-card p-0 overflow-hidden border border-[#EBE7DF] divide-y divide-[#F4F0E8] shadow-xs">
+
+          <!-- Row 1: Default Launch Building Selector -->
+          <div class="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div class="max-w-xl">
+              <span class="text-sm font-bold text-[#1E2022] block">Default Launch Building</span>
+              <p class="text-xs text-[#71767B] mt-0.5 leading-relaxed">
+                Primary BDG2 asset selected automatically when opening the overview dashboard or 3D spatial twin.
+              </p>
+            </div>
+
+            <!-- Styled Apple Select Dropdown -->
+            <div class="relative shrink-0">
+              <select id="select-default-building" class="appearance-none bg-white dark:bg-[#121824] border border-[#EBE7DF] dark:border-white/10 hover:border-slate-300 dark:hover:border-slate-700 text-xs font-semibold text-[#1E2022] dark:text-white rounded-xl px-4 py-2.5 pr-8 shadow-2xs outline-none focus:ring-2 focus:ring-[#FF7A00] transition-all cursor-pointer font-sans min-w-[280px]">
+                <option value="fa2b11d5-f608-515e-97ab-6445ef048bff">Hog_office_Bill (Office · 13,375 m²)</option>
+                <option value="6ab0f177-b255-5e4e-a6a6-abd2d0394eaa">Hog_assembly_Dona (Public Assembly · 15,501 m²)</option>
+                <option value="689abc84-be69-53b1-826e-4085b66c331c">Hog_education_Donnie (Education · 6,837 m²)</option>
+                <option value="b9dedd5a-ad6b-5312-b58e-b5ad13529263">Hog_lodging_Francisco (Residential · 14,592 m²)</option>
+              </select>
+              <span class="material-symbols-outlined text-[18px] text-[#71767B] pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2">
+                expand_more
+              </span>
+            </div>
+          </div>
+
+          <!-- Row 2: Utility Tariff Rates (Peak & Off-Peak) -->
+          <div class="p-5 space-y-3">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <span class="text-sm font-bold text-[#1E2022] dark:text-white block">Electricity Tariff Rates</span>
+                <p class="text-xs text-[#71767B] mt-0.5 leading-relaxed">
+                  Translates metered kilowatt-hour telemetry into real currency costs and solar arbitrage savings across all charts.
+                </p>
+              </div>
+
+              <!-- Currency Symbol Pill Input -->
+              <div class="flex items-center gap-1.5 self-start sm:self-auto">
+                <span class="text-[11px] font-mono text-[#71767B]">Currency:</span>
+                <input type="text" id="input-currency-symbol" value="RM" maxlength="4" class="w-14 px-2 py-1 text-center font-mono font-bold text-xs bg-white dark:bg-[#121824] border border-[#EBE7DF] dark:border-white/10 text-[#1E2022] dark:text-white rounded-lg shadow-2xs outline-none focus:border-[#FF7A00]">
+              </div>
+            </div>
+
+            <!-- Dual Inputs: Peak & Off-Peak -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+              
+              <!-- Peak Rate Input -->
+              <div class="p-3.5 rounded-2xl bg-[#FAF8F5] dark:bg-neutral-800/40 border border-[#EBE7DF] dark:border-neutral-700/60 space-y-1.5">
+                <div class="flex justify-between items-center">
+                  <span class="text-xs font-bold text-[#1E2022] dark:text-white">Peak Window Rate</span>
+                  <span class="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800">08:00 – 22:00</span>
+                </div>
+                <div class="flex items-center gap-2 bg-white dark:bg-[#121824] px-3 py-2 rounded-xl border border-[#EBE7DF] dark:border-white/10 shadow-inner">
+                  <span class="text-xs font-mono font-bold text-[#71767B]">RM</span>
+                  <input type="number" id="input-peak-rate" step="0.001" min="0" value="0.584" class="w-full text-sm font-mono font-bold text-[#1E2022] dark:text-white bg-transparent outline-none">
+                  <span class="text-[11px] font-mono text-[#71767B]">/ kWh</span>
+                </div>
+                <span class="text-[10px] text-[#71767B] block font-mono">TNB Commercial C1 Peak Tariff standard</span>
+              </div>
+
+              <!-- Off-Peak Rate Input -->
+              <div class="p-3.5 rounded-2xl bg-[#FAF8F5] dark:bg-neutral-800/40 border border-[#EBE7DF] dark:border-neutral-700/60 space-y-1.5">
+                <div class="flex justify-between items-center">
+                  <span class="text-xs font-bold text-[#1E2022] dark:text-white">Off-Peak Window Rate</span>
+                  <span class="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">22:00 – 08:00</span>
+                </div>
+                <div class="flex items-center gap-2 bg-white dark:bg-[#121824] px-3 py-2 rounded-xl border border-[#EBE7DF] dark:border-white/10 shadow-inner">
+                  <span class="text-xs font-mono font-bold text-[#71767B]">RM</span>
+                  <input type="number" id="input-offpeak-rate" step="0.001" min="0" value="0.220" class="w-full text-sm font-mono font-bold text-[#1E2022] dark:text-white bg-transparent outline-none">
+                  <span class="text-[11px] font-mono text-[#71767B]">/ kWh</span>
+                </div>
+                <span class="text-[10px] text-[#71767B] block font-mono">TNB Commercial C1 Off-Peak Night rate</span>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- Row 3: Benchmark Visibility Toggle -->
+          <div class="p-5 flex items-center justify-between gap-4">
+            <div class="max-w-xl">
+              <span class="text-sm font-bold text-[#1E2022] dark:text-white block">Public Benchmark Curves Visibility</span>
+              <p class="text-xs text-[#71767B] mt-0.5 leading-relaxed">
+                Show official Building Data Genome Project 2 (BDG2) v1.0 reference lines and GBI Gold baselines on analytics charts.
+              </p>
+            </div>
+
+            <!-- iOS Style Toggle Switch -->
+            <label class="relative inline-flex items-center cursor-pointer select-none shrink-0">
+              <input type="checkbox" id="toggle-benchmark-lines" class="sr-only peer" checked>
+              <div class="w-11 h-6 bg-[#E5E5EA] dark:bg-neutral-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all after:shadow-sm peer-checked:bg-[#22C55E]"></div>
+            </label>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- =============================================================== -->
+      <!-- SECTION 4: BACKEND API & SUPABASE DATABASE CONNECTIVITY         -->
+      <!-- =============================================================== -->
+      <section class="space-y-3">
+        <!-- Section Header with Apple-Style Icon Badge -->
+        <div class="flex items-center gap-2.5">
+          <div class="w-7 h-7 rounded-lg bg-sky-600 text-white flex items-center justify-center shadow-xs">
+            <span class="material-symbols-outlined text-[17px]">database</span>
+          </div>
+          <div>
+            <h2 class="text-sm font-bold text-[#1E2022] dark:text-white font-sans">Backend API & Supabase Database Connectivity</h2>
+            <p class="text-[11px] text-[#71767B]">Configure FastAPI server origin, monitor live PostgreSQL tables, and run connectivity diagnostics</p>
+          </div>
+        </div>
+
+        <!-- Grouped Card Container -->
+        <div class="velora-card p-0 overflow-hidden border border-[#EBE7DF] divide-y divide-[#F4F0E8] shadow-xs">
+
+          <!-- Row 1: FastAPI Backend Origin URL -->
+          <div class="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div class="max-w-xl">
+              <span class="text-sm font-bold text-[#1E2022] dark:text-white block">FastAPI Server URL</span>
+              <p class="text-xs text-[#71767B] mt-0.5 leading-relaxed">
+                Primary API gateway connecting the browser to machine learning forecasting models and PostgREST database bridges.
+              </p>
+            </div>
+
+            <!-- Input & Test Button -->
+            <div class="flex items-center gap-2 w-full md:w-auto">
+              <div class="flex items-center gap-2 bg-white dark:bg-[#121824] px-3.5 py-2 rounded-xl border border-[#EBE7DF] dark:border-white/10 shadow-inner flex-1 md:w-64">
+                <span class="material-symbols-outlined text-[16px] text-[#71767B]">link</span>
+                <input type="text" id="input-api-base-url" value="http://127.0.0.1:8000" placeholder="http://127.0.0.1:8000" class="w-full text-xs font-mono font-medium text-[#1E2022] dark:text-white bg-transparent outline-none">
+              </div>
+
+              <button type="button" id="btn-test-api" class="px-3.5 py-2 rounded-xl bg-[#1E2022] hover:bg-black dark:bg-white dark:hover:bg-slate-200 text-white dark:text-[#1E2022] text-xs font-semibold flex items-center gap-1.5 shadow-xs transition-all hover:scale-105 active:scale-95 shrink-0" title="Ping API & Database">
+                <span class="material-symbols-outlined text-[15px]">sync</span>
+                <span>Test Connection</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Row 2: Supabase PostgreSQL Live Diagnostics -->
+          <div class="p-5 space-y-3">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <span class="text-sm font-bold text-[#1E2022] dark:text-white block">Supabase PostgreSQL Live Status</span>
+                <p class="text-xs text-[#71767B] mt-0.5 leading-relaxed">
+                  Real-time cloud database connection hosted on Supabase PostgREST infrastructure.
+                </p>
+              </div>
+
+              <!-- Live Indicator Badge & Latency -->
+              <div class="flex items-center gap-2 self-start sm:self-auto">
+                <span id="db-status-badge" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200/80 dark:border-emerald-800/60 text-[11px] font-semibold text-emerald-800 dark:text-emerald-300">
+                  <span id="db-status-dot" class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                  <span id="db-status-text">Connected · Live PostgreSQL (PostgREST)</span>
+                </span>
+                <span id="db-ping-ms" class="text-[11px] font-mono px-2 py-0.5 rounded-md bg-slate-100 dark:bg-neutral-800 text-slate-600 dark:text-slate-300 font-semibold">-- ms</span>
+              </div>
+            </div>
+
+            <!-- Diagnostics Details & Table Counters -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+              
+              <!-- Stat Card 1: Assets -->
+              <div class="p-3.5 rounded-2xl bg-[#FAF8F5] dark:bg-neutral-800/40 border border-[#EBE7DF] dark:border-neutral-700/60 space-y-1">
+                <div class="flex items-center justify-between">
+                  <span class="text-[11px] font-bold text-[#71767B]">Table: assets</span>
+                  <span class="material-symbols-outlined text-[16px] text-sky-500">domain</span>
+                </div>
+                <div id="stat-assets-count" class="text-base font-extrabold text-[#1E2022] dark:text-white font-sans">
+                  4 Buildings
+                </div>
+                <span class="text-[10px] text-[#71767B] block font-mono">Dona, Donnie, Francisco, Bill</span>
+              </div>
+
+              <!-- Stat Card 2: Meters -->
+              <div class="p-3.5 rounded-2xl bg-[#FAF8F5] dark:bg-neutral-800/40 border border-[#EBE7DF] dark:border-neutral-700/60 space-y-1">
+                <div class="flex items-center justify-between">
+                  <span class="text-[11px] font-bold text-[#71767B]">Table: meters</span>
+                  <span class="material-symbols-outlined text-[16px] text-emerald-500">electric_meter</span>
+                </div>
+                <div id="stat-meters-count" class="text-base font-extrabold text-[#1E2022] dark:text-white font-sans">
+                  4 Active Meters
+                </div>
+                <span class="text-[10px] text-[#71767B] block font-mono">Whole-building electricity</span>
+              </div>
+
+              <!-- Stat Card 3: Energy Readings -->
+              <div class="p-3.5 rounded-2xl bg-[#FAF8F5] dark:bg-neutral-800/40 border border-[#EBE7DF] dark:border-neutral-700/60 space-y-1">
+                <div class="flex items-center justify-between">
+                  <span class="text-[11px] font-bold text-[#71767B]">Table: energy_readings</span>
+                  <span class="material-symbols-outlined text-[16px] text-[#FF7A00]">query_stats</span>
+                </div>
+                <div id="stat-readings-count" class="text-base font-extrabold text-[#1E2022] dark:text-white font-sans">
+                  672 Verified Readings
+                </div>
+                <span class="text-[10px] text-[#71767B] block font-mono">Hourly interval series</span>
+              </div>
+
+            </div>
+
+            <!-- Endpoint URL display bar -->
+            <div class="pt-1 flex items-center justify-between text-[11px] text-[#71767B] font-mono bg-slate-50 dark:bg-neutral-900/60 p-2.5 rounded-xl border border-slate-100 dark:border-neutral-800">
+              <span class="truncate">Supabase Host: <code id="db-url-text" class="text-[#FF7A00] font-bold">https://bqxlvkxqiooyvyldsmcp.supabase.co</code></span>
+              <span class="text-emerald-600 dark:text-emerald-400 font-semibold shrink-0">SSL Encrypted · PostgREST v12</span>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- Bottom Help Note -->
+      <div class="p-4 rounded-2xl bg-white border border-[#EBE7DF] flex items-center justify-between text-xs text-[#71767B]">
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-[18px] text-[#FF7A00]">info</span>
+          <span>Configuration is stored locally in your browser and automatically applied across all EnergiOS views.</span>
+        </div>
+        <span class="font-mono text-[11px] hidden sm:inline">v2.1.0-velora</span>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- =================================================================== -->
+  <!-- TOAST NOTIFICATION                                                  -->
+  <!-- =================================================================== -->
+  <div id="velora-toast" class="fixed bottom-6 right-6 z-50 transform translate-y-4 opacity-0 transition-all duration-200 pointer-events-none">
+    <div class="bg-[#1E2022] text-white px-4 py-2.5 rounded-xl shadow-xl text-xs font-medium flex items-center gap-2">
+      <span class="material-symbols-outlined text-sm text-[#FF7A00]">check_circle</span>
+      <span id="velora-toast-text">Notification</span>
+    </div>
+  </div>
+
+  <!-- Controller Scripts -->
+  <script src="src/js/dynamic_island.js"></script>
+  <script src="src/js/settings.js?v=2.2.0"></script>
+</body>
+</html>

@@ -1,0 +1,486 @@
+/* EnergiOS - 100% Exact 1:1 Replica of idea-02-light.jpeg */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800&family=Space+Grotesk:wght@500;600&display=swap');
+
+:root {
+  --bg-velora: #FAF8F5;
+  --card-white: #FFFFFF;
+  --text-primary: #1E2022;
+  --text-secondary: #71767B;
+  --text-muted: #9CA3AF;
+  --accent-orange: #FF7A00;
+  --accent-yellow: #FACC15;
+  --accent-green: #22C55E;
+  --accent-red: #EF4444;
+  --pill-bg: #F4F0E8;
+  --pill-border: rgba(0, 0, 0, 0.04);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background-color: var(--bg-velora);
+  color: var(--text-primary);
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, .font-heading {
+  font-family: 'Inter', sans-serif;
+  letter-spacing: -0.02em;
+}
+
+/* Velora 1:1 Card Surface */
+.velora-card {
+  background: #FFFFFF;
+  border-radius: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+  padding: 24px;
+  position: relative;
+}
+
+/* Floating Vertical Nav Sidebar */
+.velora-sidebar {
+  width: 52px;
+  background: #FFFFFF;
+  border-radius: 20px;
+  padding: 14px 0;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.03);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+.velora-nav-btn {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  color: #71767B;
+  transition: all 0.15s ease;
+  cursor: pointer;
+}
+
+.velora-nav-btn:hover {
+  color: #1E2022;
+  background: #F4F0E8;
+}
+
+.velora-nav-btn.active {
+  color: #FF7A00;
+  background: #FFF3EB;
+}
+
+/* Segmented Top Pill Bar */
+.velora-pill-container {
+  background: #F4F0E8;
+  border-radius: 9999px;
+  padding: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.velora-pill {
+  padding: 6px 18px;
+  border-radius: 9999px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #71767B;
+  transition: all 0.15s ease;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+}
+
+.velora-pill.active {
+  background: #FFFFFF;
+  color: #1E2022;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  font-weight: 600;
+}
+
+/* Icon Buttons (Filter, Download) */
+.velora-icon-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: #FFFFFF;
+  border: 1px solid #EBE7DF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #71767B;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.velora-icon-btn:hover {
+  color: #1E2022;
+  border-color: #D1D5DB;
+}
+
+/* Ruler Tick Marks (Under Battery Bars) */
+.ruler-ticks {
+  width: 100%;
+  height: 6px;
+  background-image: repeating-linear-gradient(
+    to right,
+    #CBD5E1 0px,
+    #CBD5E1 1px,
+    transparent 1px,
+    transparent 4px
+  );
+  margin-top: 5px;
+}
+
+/* System Diagonal Stripe Pattern */
+.system-hatch-pattern {
+  background-image: repeating-linear-gradient(
+    45deg,
+    #F3F4F6 0px,
+    #F3F4F6 4px,
+    #E5E7EB 4px,
+    #E5E7EB 8px
+  );
+  border: 1px dashed #CBD5E1;
+}
+
+/* Heatmap Grid Cell */
+.heatmap-cell {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  transition: transform 0.15s ease;
+}
+
+.heatmap-cell:hover {
+  transform: scale(1.12);
+}
+
+/* Exact Building Image Container with bottom mist fade */
+.exact-building-wrapper {
+  position: relative;
+  overflow: hidden;
+  max-width: 500px;
+  width: 100%;
+  mask-image: linear-gradient(to bottom, black 72%, transparent 98%);
+  -webkit-mask-image: linear-gradient(to bottom, black 72%, transparent 98%);
+}
+
+.exact-building-img {
+  width: 100%;
+  height: auto;
+  display: block;
+  object-fit: contain;
+}
+
+/* =================================================================== */
+/* Apple Dynamic Island (1:1 Exact Replica of dynamic_island.jpeg)     */
+/* =================================================================== */
+#dynamic-island {
+  transform-origin: top center;
+  transition: all 0.38s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+#island-collapsed {
+  animation: islandPulse 4s ease-in-out infinite;
+}
+
+@keyframes islandPulse {
+  0%, 100% {
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+  }
+  50% {
+    box-shadow: 0 4px 28px rgba(0, 0, 0, 0.45);
+  }
+}
+
+#island-expanded {
+  animation: islandExpand 0.32s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes islandExpand {
+  0% {
+    opacity: 0;
+    transform: scale(0.92) translateY(-8px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Custom dark scrollbar for Agent Logs inside island */
+#island-agent-logs-list::-webkit-scrollbar {
+  width: 4px;
+}
+#island-agent-logs-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+#island-agent-logs-list::-webkit-scrollbar-thumb {
+  background: #2D3036;
+  border-radius: 4px;
+}
+
+/* =================================================================== */
+/* VELORA OBSIDIAN DARK MODE THEME SYSTEM                              */
+/* =================================================================== */
+html.dark {
+  --bg-velora: #0A0E17;
+  --card-white: #111726;
+  --text-primary: #F1F5F9;
+  --text-secondary: #94A3B8;
+  --text-muted: #64748B;
+  --accent-orange: #FF7A00;
+  --accent-yellow: #FACC15;
+  --accent-green: #22C55E;
+  --accent-red: #EF4444;
+  --pill-bg: #162030;
+  --pill-border: rgba(255, 255, 255, 0.08);
+  color-scheme: dark;
+}
+
+html.dark body {
+  background-color: #0A0E17 !important;
+  color: #F1F5F9 !important;
+}
+
+/* Velora Card Surfaces in Dark Mode */
+html.dark .velora-card,
+html.dark .bento-card {
+  background-color: #111726 !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 4px 24px -2px rgba(0, 0, 0, 0.55), 0 2px 6px -1px rgba(0, 0, 0, 0.3) !important;
+}
+
+html.dark .velora-card-subtle,
+html.dark .bento-card-subtle {
+  background-color: #162030 !important;
+  border-color: rgba(255, 255, 255, 0.07) !important;
+}
+
+/* Floating Vertical Nav Sidebar in Dark Mode */
+html.dark .velora-sidebar {
+  background: #111726 !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6) !important;
+}
+
+html.dark .velora-nav-btn {
+  color: #94A3B8 !important;
+}
+
+html.dark .velora-nav-btn:hover {
+  color: #FFFFFF !important;
+  background: #1C273C !important;
+}
+
+html.dark .velora-nav-btn.active {
+  color: #FF7A00 !important;
+  background: rgba(255, 122, 0, 0.16) !important;
+}
+
+/* Segmented Top Pill Bar in Dark Mode */
+html.dark .velora-pill-container {
+  background: #162030 !important;
+  border: 1px solid rgba(255, 255, 255, 0.06) !important;
+}
+
+html.dark .velora-pill {
+  color: #94A3B8 !important;
+}
+
+html.dark .velora-pill:hover {
+  color: #F8FAFC !important;
+}
+
+html.dark .velora-pill.active {
+  background: #223046 !important;
+  color: #FFFFFF !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45) !important;
+}
+
+/* Icon Buttons in Dark Mode */
+html.dark .velora-icon-btn {
+  background: #111726 !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  color: #94A3B8 !important;
+}
+
+html.dark .velora-icon-btn:hover {
+  background: #1C273C !important;
+  color: #FFFFFF !important;
+  border-color: rgba(255, 255, 255, 0.22) !important;
+}
+
+/* Background Color Class Overrides */
+html.dark .bg-\[\#FAF8F5\] {
+  background-color: #0A0E17 !important;
+}
+
+html.dark .bg-white {
+  background-color: #111726 !important;
+}
+
+html.dark .bg-\[\#F4F0E8\] {
+  background-color: #162030 !important;
+}
+
+html.dark .bg-slate-50,
+html.dark .bg-neutral-50 {
+  background-color: #0A0E17 !important;
+}
+
+/* Text Color Class Overrides */
+html.dark .text-\[\#1E2022\] {
+  color: #F1F5F9 !important;
+}
+
+html.dark .text-\[\#71767B\] {
+  color: #94A3B8 !important;
+}
+
+html.dark .text-slate-800,
+html.dark .text-neutral-800,
+html.dark .text-slate-900,
+html.dark .text-neutral-900 {
+  color: #F8FAFC !important;
+}
+
+html.dark .text-slate-600,
+html.dark .text-neutral-600 {
+  color: #94A3B8 !important;
+}
+
+/* Borders & Dividers */
+html.dark .border-\[\#EBE7DF\],
+html.dark .border-slate-200,
+html.dark .border-neutral-200 {
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+html.dark .divide-\[\#F4F0E8\] > :not([hidden]) ~ :not([hidden]),
+html.dark .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
+html.dark .divide-neutral-100 > :not([hidden]) ~ :not([hidden]) {
+  border-color: rgba(255, 255, 255, 0.06) !important;
+}
+
+/* Form Controls: Inputs, Selects, and Dropdowns */
+html.dark select,
+html.dark input[type="text"],
+html.dark input[type="number"] {
+  background-color: #162030 !important;
+  color: #F1F5F9 !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+html.dark select option {
+  background-color: #111726;
+  color: #F1F5F9;
+}
+
+/* Nested Card Containers (e.g. rate boxes, notification toggles in settings) */
+html.dark .velora-card .bg-\[\#FAF8F5\],
+html.dark .velora-card .bg-white {
+  background-color: #162030 !important;
+  border-color: rgba(255, 255, 255, 0.07) !important;
+}
+
+/* Badges & Pills */
+html.dark .bg-emerald-50 {
+  background-color: rgba(6, 78, 59, 0.45) !important;
+  border-color: rgba(16, 185, 129, 0.3) !important;
+  color: #6EE7B7 !important;
+}
+
+html.dark .bg-amber-50 {
+  background-color: rgba(120, 53, 15, 0.45) !important;
+  border-color: rgba(245, 158, 11, 0.3) !important;
+  color: #FCD34D !important;
+}
+
+html.dark .bg-rose-50 {
+  background-color: rgba(136, 19, 55, 0.45) !important;
+  border-color: rgba(244, 63, 94, 0.3) !important;
+  color: #FDA4AF !important;
+}
+
+/* iOS Toggle Switch Track in Dark */
+html.dark .bg-\[\#E5E5EA\] {
+  background-color: #2D3748 !important;
+}
+
+/* Table Hover */
+html.dark tr:hover td {
+  background-color: #162030 !important;
+}
+
+/* System Hatch & Ruler Ticks in Dark */
+html.dark .system-hatch-pattern {
+  background-image: repeating-linear-gradient(
+    45deg,
+    #162030 0px,
+    #162030 4px,
+    #1C273C 4px,
+    #1C273C 8px
+  ) !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+html.dark .ruler-ticks {
+  background-image: repeating-linear-gradient(
+    to right,
+    #334155 0px,
+    #334155 1px,
+    transparent 1px,
+    transparent 4px
+  ) !important;
+}
+
+/* Custom Scrollbars in Dark Mode */
+html.dark ::-webkit-scrollbar-track {
+  background: #0A0E17;
+}
+
+html.dark ::-webkit-scrollbar-thumb {
+  background: #1E293B;
+  border-radius: 9999px;
+}
+
+html.dark ::-webkit-scrollbar-thumb:hover {
+  background: #334155;
+}
+
+/* Smooth Transitions for Theme Toggling */
+body, .velora-card, .velora-sidebar, .velora-pill-container, .velora-pill, .velora-icon-btn, header {
+  transition: background-color 0.25s ease, border-color 0.25s ease, color 0.2s ease, box-shadow 0.25s ease;
+}
+
+/* Energy Flow Animated Conduit Curves */
+@keyframes flowDashAnim {
+  from { stroke-dashoffset: 20; }
+  to { stroke-dashoffset: 0; }
+}
+
+.animate-flow-dash {
+  animation: flowDashAnim 1.4s linear infinite;
+}
+
+.flow-ribbon {
+  transition: opacity 0.2s ease, filter 0.2s ease;
+}
+
+.flow-ribbon:hover {
+  opacity: 0.95 !important;
+  filter: drop-shadow(0 2px 6px rgba(255, 122, 0, 0.25));
+}
+
+
