@@ -101,6 +101,7 @@ class EnergiOSTwinApp {
     this.initChatbot();
     this.renderAgentLogs();
     this._startAgentLogLoop();
+    this.applyInitialChatLayout();
 
     // 6. Theme change listener
     window.addEventListener('energios:theme-changed', (e) => {
@@ -111,6 +112,43 @@ class EnergiOSTwinApp {
       }
       this.renderBuildingPowerDials();
     });
+  }
+
+  applyInitialChatLayout() {
+    const savedState = localStorage.getItem('energios_ai_chat_state');
+    const chatCard = document.getElementById('twin-ai-chat-card');
+    const alertsTab = document.getElementById('twin-ai-alerts-tab');
+    const liveUsage = document.getElementById('twin-live-usage-card');
+    const island = document.getElementById('dynamic-island');
+    const collapsed = document.getElementById('island-collapsed');
+    const expanded = document.getElementById('island-expanded');
+
+    if (savedState === 'minimized') {
+      if (chatCard) chatCard.classList.add('hidden');
+      if (liveUsage) {
+        liveUsage.classList.remove('hidden');
+        this.renderBuildingPowerDials();
+      }
+      if (alertsTab) {
+        alertsTab.classList.remove('hidden');
+        this.renderAlertsTabList();
+      }
+      if (island) {
+        island.classList.remove('hidden');
+        if (collapsed) collapsed.classList.remove('hidden');
+        if (expanded) expanded.classList.add('hidden');
+      }
+    } else {
+      // Default: AI chat expanded full to the half right
+      if (chatCard) {
+        chatCard.classList.remove('hidden');
+        chatCard.style.opacity = '1';
+        chatCard.style.pointerEvents = '';
+      }
+      if (liveUsage) liveUsage.classList.add('hidden');
+      if (alertsTab) alertsTab.classList.add('hidden');
+      if (island) island.classList.add('hidden');
+    }
   }
 
   // ==========================================
@@ -888,11 +926,12 @@ class EnergiOSTwinApp {
 
     if (!chatCard || this._isMorphing) return;
     this._isMorphing = true;
+    localStorage.setItem('energios_ai_chat_state', 'minimized');
 
-    // Measure starting position of AI chat card
+    // Measure starting position of AI chat card (full right half)
     const chatRect = chatCard.getBoundingClientRect();
 
-    // Calculate target resting position of Dynamic Island at top center
+    // Target Dynamic Island coordinates at top center
     const islandWidth = 160;
     const islandHeight = 36;
     const islandTop = 14;
@@ -901,22 +940,22 @@ class EnergiOSTwinApp {
     const isDarkMode = document.documentElement.classList.contains('dark');
 
     if (proxy) {
-      // 1. Position proxy precisely over chatCard
+      // 1. Position proxy precisely over full chatCard
       proxy.style.transition = 'none';
       proxy.style.left = `${chatRect.left}px`;
       proxy.style.top = `${chatRect.top}px`;
       proxy.style.width = `${chatRect.width}px`;
       proxy.style.height = `${chatRect.height}px`;
-      proxy.style.borderRadius = '24px';
-      proxy.style.background = isDarkMode ? '#121824' : '#ffffff';
-      proxy.style.borderColor = isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)';
+      proxy.style.borderRadius = '32px';
+      proxy.style.background = isDarkMode ? '#101726' : '#ffffff';
+      proxy.style.borderColor = isDarkMode ? 'rgba(255, 140, 0, 0.4)' : '#FFD2A8';
       proxy.style.opacity = '1';
       proxy.classList.remove('hidden');
 
       const morphContent = document.getElementById('morph-island-content');
       if (morphContent) morphContent.style.opacity = '0';
 
-      // 2. Hide chatCard
+      // 2. Hide chatCard immediately
       chatCard.style.opacity = '0';
       chatCard.style.pointerEvents = 'none';
 
@@ -935,7 +974,7 @@ class EnergiOSTwinApp {
         });
       });
 
-      // 4. On animation completion, swap to real Dynamic Island and show Alerts tab
+      // 4. On animation completion, swap to real Dynamic Island and show live meter (top right) & alerts (bottom right)
       setTimeout(() => {
         proxy.classList.add('hidden');
         proxy.style.opacity = '0';
@@ -944,6 +983,13 @@ class EnergiOSTwinApp {
         chatCard.style.opacity = '';
         chatCard.style.pointerEvents = '';
 
+        // Show live meter on top right half
+        if (liveUsage) {
+          liveUsage.classList.remove('hidden');
+          this.renderBuildingPowerDials();
+        }
+
+        // Show alert container at bottom right half
         if (alertsTab) {
           alertsTab.classList.remove('hidden');
           this.renderAlertsTabList();
@@ -965,10 +1011,14 @@ class EnergiOSTwinApp {
         }
 
         this._isMorphing = false;
-        this.showToast('AI Copilot minimised • Showing active alerts tab');
+        this.showToast('AI Copilot minimised • Live meter & alerts active');
       }, 420);
     } else {
       chatCard.classList.add('hidden');
+      if (liveUsage) {
+        liveUsage.classList.remove('hidden');
+        this.renderBuildingPowerDials();
+      }
       if (alertsTab) {
         alertsTab.classList.remove('hidden');
         this.renderAlertsTabList();
@@ -981,14 +1031,17 @@ class EnergiOSTwinApp {
   restoreAiChat() {
     const chatCard = document.getElementById('twin-ai-chat-card');
     const alertsTab = document.getElementById('twin-ai-alerts-tab');
+    const liveUsage = document.getElementById('twin-live-usage-card');
     const island = document.getElementById('dynamic-island');
     const proxy = document.getElementById('ai-chat-morph-proxy');
 
     if (!chatCard || this._isMorphing) return;
     this._isMorphing = true;
+    localStorage.setItem('energios_ai_chat_state', 'expanded');
 
-    // Hide alerts tab
+    // Hide live meter and alerts tab so chatCard expands full to the half right
     if (alertsTab) alertsTab.classList.add('hidden');
+    if (liveUsage) liveUsage.classList.add('hidden');
 
     // Get current Dynamic Island position
     const islandRect = island ? island.getBoundingClientRect() : {
@@ -998,7 +1051,7 @@ class EnergiOSTwinApp {
       height: 36
     };
 
-    // Temporarily lay out chatCard to get target destination rect
+    // Temporarily lay out chatCard to get target destination rect (full right half)
     chatCard.classList.remove('hidden');
     chatCard.style.visibility = 'hidden';
 
@@ -1028,7 +1081,7 @@ class EnergiOSTwinApp {
       const morphContent = document.getElementById('morph-island-content');
       if (morphContent) morphContent.style.opacity = '1';
 
-      // 2. Animate morph down to right column
+      // 2. Animate morph down to full right half
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           proxy.style.transition = 'all 420ms cubic-bezier(0.16, 1, 0.3, 1)';
@@ -1036,9 +1089,9 @@ class EnergiOSTwinApp {
           proxy.style.top = `${targetRect.top}px`;
           proxy.style.width = `${targetRect.width}px`;
           proxy.style.height = `${targetRect.height}px`;
-          proxy.style.borderRadius = '24px';
-          proxy.style.background = isDarkMode ? '#121824' : '#ffffff';
-          proxy.style.borderColor = isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)';
+          proxy.style.borderRadius = '32px';
+          proxy.style.background = isDarkMode ? '#101726' : '#ffffff';
+          proxy.style.borderColor = isDarkMode ? 'rgba(255, 140, 0, 0.4)' : '#FFD2A8';
           if (morphContent) morphContent.style.opacity = '0';
         });
       });
@@ -1059,11 +1112,13 @@ class EnergiOSTwinApp {
         );
 
         this._isMorphing = false;
-        this.showToast('AI Copilot restored');
+        this.showToast('AI Copilot expanded to full right half');
       }, 420);
     } else {
+      chatCard.classList.remove('hidden');
       chatCard.style.opacity = '1';
       chatCard.style.pointerEvents = '';
+      if (island) island.classList.add('hidden');
       this._isMorphing = false;
     }
   }

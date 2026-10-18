@@ -394,12 +394,12 @@
         <section class="lg:col-span-6 flex flex-col gap-4 h-[calc(100vh-190px)] min-h-[660px] max-h-[880px]">
 
           <!-- =========================================================== -->
-          <!-- CONTAINER 1: LIVE USAGE                                     -->
+          <!-- CONTAINER 1: LIVE USAGE (MINIMISED STATE: TOP RIGHT HALF)   -->
           <!-- FOUR POWER DEMAND CHARTS FOR 4 BUILDINGS (INDEX.HTML STYLE) -->
           <!-- =========================================================== -->
-          <div id="twin-live-usage-card" style="flex: 0 0 auto;" class="velora-card p-3.5 lg:p-4 flex flex-col justify-between border border-slate-200/80 dark:border-neutral-800 shadow-sm rounded-3xl bg-white dark:bg-[#121824] transition-all">
+          <div id="twin-live-usage-card" style="flex: 0 0 auto;" class="velora-card p-3.5 lg:p-4 flex flex-col justify-between border border-slate-200/80 dark:border-neutral-800 shadow-sm rounded-3xl bg-white dark:bg-[#121824] transition-all hidden shrink-0">
             
-            <!-- Container Header with 4 Assets Label & Legend -->
+            <!-- Container Header with 4 Assets Label, Legend & Expand AI Button -->
             <div class="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-neutral-800/80 shrink-0">
               <div class="flex items-center gap-2">
                 <div class="w-6 h-6 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
@@ -413,14 +413,21 @@
                 </div>
               </div>
 
-              <!-- Energy Source Legend: Solar (Green) vs Grid (Blue) -->
-              <div class="flex items-center gap-2 text-[10px] font-mono">
-                <span class="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/80 border border-emerald-300 dark:border-emerald-700 text-emerald-800 dark:text-emerald-300 font-bold">
-                  <span class="w-2 h-2 rounded-full bg-[#22C55E]"></span> ☀️ Solar (Green)
-                </span>
-                <span class="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/80 border border-blue-300 dark:border-blue-700 text-blue-800 dark:text-blue-300 font-bold">
-                  <span class="w-2 h-2 rounded-full bg-[#2563EB]"></span> ⚡ Grid (Blue)
-                </span>
+              <!-- Right: Energy Source Legend + Expand AI Chat Button -->
+              <div class="flex items-center gap-2">
+                <div class="flex items-center gap-2 text-[10px] font-mono">
+                  <span class="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/80 border border-emerald-300 dark:border-emerald-700 text-emerald-800 dark:text-emerald-300 font-bold">
+                    <span class="w-2 h-2 rounded-full bg-[#22C55E]"></span> ☀️ Solar
+                  </span>
+                  <span class="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/80 border border-blue-300 dark:border-blue-700 text-blue-800 dark:text-blue-300 font-bold">
+                    <span class="w-2 h-2 rounded-full bg-[#2563EB]"></span> ⚡ Grid
+                  </span>
+                </div>
+                <button onclick="twinApp.restoreAiChat()" class="px-2.5 py-1 rounded-xl bg-orange-50 hover:bg-orange-100 dark:bg-orange-950/60 dark:hover:bg-orange-900/60 text-[#FF7A00] dark:text-orange-400 text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer shadow-2xs border border-orange-200 dark:border-orange-800/60" title="Expand AI Copilot to full right half">
+                  <span class="material-symbols-outlined text-[13px]">smart_toy</span>
+                  <span class="hidden sm:inline">AI Chat</span>
+                  <span class="material-symbols-outlined text-[13px]">open_in_full</span>
+                </button>
               </div>
             </div>
 
@@ -432,9 +439,9 @@
           </div>
 
           <!-- =========================================================== -->
-          <!-- CONTAINER 2: AI COPILOT CHATBOT (100% DESIGN MATCH TO PHOTO) -->
+          <!-- CONTAINER 2: AI COPILOT CHATBOT (EXPANDED STATE: FULL RIGHT) -->
           <!-- =========================================================== -->
-          <div id="twin-ai-chat-card" style="flex: 1 1 0%; min-height: 280px;" class="p-5 lg:p-6 flex flex-col overflow-hidden rounded-[32px] border-2 border-[#FFD2A8] dark:border-orange-500/40 shadow-[0_0_35px_rgba(255,140,0,0.18)] dark:shadow-[0_0_35px_rgba(255,140,0,0.12)] bg-white dark:bg-[#101726] transition-all">
+          <div id="twin-ai-chat-card" style="flex: 1 1 0%; height: 100%; min-height: 280px;" class="h-full flex-1 p-5 lg:p-6 flex flex-col overflow-hidden rounded-[32px] border-2 border-[#FFD2A8] dark:border-orange-500/40 shadow-[0_0_35px_rgba(255,140,0,0.18)] dark:shadow-[0_0_35px_rgba(255,140,0,0.12)] bg-white dark:bg-[#101726] transition-all">
             
             <!-- Chatbot Header (Exact Match to Photo with Minimise Button) -->
             <div class="flex items-center justify-between pb-3 shrink-0">
@@ -604,8 +611,8 @@
               </div>
 
               <!-- Expand to Full AI Chat Button -->
-              <button onclick="twinApp.restoreAiChat()" class="px-2.5 py-1 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-slate-600 hover:text-slate-900 dark:text-neutral-300 dark:hover:text-white text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer shadow-2xs" title="Expand AI Copilot Chat">
-                <span>Expand Chat</span>
+              <button onclick="twinApp.restoreAiChat()" class="px-2.5 py-1 rounded-xl bg-orange-50 hover:bg-orange-100 dark:bg-orange-950/60 dark:hover:bg-orange-900/60 text-[#FF7A00] dark:text-orange-400 text-xs font-bold flex items-center gap-1 transition-all cursor-pointer shadow-2xs border border-orange-200 dark:border-orange-800/60" title="Expand AI Copilot to full right half">
+                <span>Expand AI Chat</span>
                 <span class="material-symbols-outlined text-[14px]">open_in_full</span>
               </button>
             </div>
