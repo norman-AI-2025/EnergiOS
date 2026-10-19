@@ -19,6 +19,9 @@ from src.bdg2_data import (
     get_data_service,
 )
 from src.gemini_service import GeminiChatService
+from src.dispatch_explanation import (
+    DispatchExplanationRequest, ExplanationUnavailable, explain_dispatch, remember_dispatch,
+)
 from src.models import (
     AnomalyListResponse,
     AssetListResponse,
@@ -29,6 +32,16 @@ from src.models import (
     ForecastResponse,
     HealthResponse,
     ReadingListResponse,
+)
+from src.solar_grid import (
+    SolarGridRecommendation,
+    SolarGridRequest,
+    WeatherUnavailable,
+    fetch_open_meteo,
+    recommend_dispatch,
+)
+from src.video_dispatch import (
+    VideoRequest, VideoReviewRequest, VideoRecommendation, build_video_dispatch, review_video_dispatch,
 )
 
 
@@ -256,6 +269,83 @@ async def asset_energy_flow(
         return await service.get_energy_flow_async(asset_id, timeframe=timeframe)
     except Exception as error:
         raise map_error(error) from error
+
+
+@app.post(
+    "/demo/solar-grid/recommendation",
+    response_model=SolarGridRecommendation,
+    tags=["Solar/Grid Scenario Analysis"],
+)
+async def solar_grid_recommendation(
+    payload: SolarGridRequest,
+    service: ServiceDependency,
+) -> SolarGridRecommendation:
+    """Return a read-only dispatch scenario from the BDG2 demand forecast and public weather forecast."""
+    try:
+        forecast = service.get_forecast(payload.asset_id)
+        assets = await service.list_assets_async(limit=100)
+        asset = next(
+            item for item in assets.items
+            if item.id == forecast.asset_id or item.source_asset_id == payload.asset_id
+        )
+    except Exception as error:
+        raise map_error(error) from error
+
+    try:
+        weather = await fetch_open_meteo(payload.latitude, payload.longitude)
+    except WeatherUnavailable as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+
+    try:
+        result = recommend_dispatch(
+            payload,
+            [item.model_dump() for item in forecast.items],
+            weather,
+            asset_name=asset.name,
+            provenance=forecast.provenance.model_dump(),
+        )
+        remember_dispatch(result)
+        return result
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+
+
+@app.post("/demo/solar-grid/explanation", tags=["Solar/Grid Scenario Analysis"])
+async def solar_grid_explanation(payload: DispatchExplanationRequest):
+    """Explain a cached engine result only; no client-supplied recommendations or controls."""
+    try:
+        return await explain_dispatch(payload)
+    except LookupError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except ExplanationUnavailable as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+
+
+@app.post("/demo/solar-grid/video/recommendation", response_model=VideoRecommendation,
+          tags=["Solar/Grid Scenario Analysis"])
+async def video_solar_grid_recommendation(payload: VideoRequest):
+    """Run pinned demand history through the existing forecast and dispatch code, offline."""
+    try:
+        result = build_video_dispatch(payload)
+        remember_dispatch(result)
+        return result
+    except LookupError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except (ValueError, OSError, KeyError) as error:
+        raise HTTPException(status_code=503, detail="Fixed demo inputs failed verification; inspect the versioned profile.") from error
+
+
+@app.post("/demo/solar-grid/video/revalidate", tags=["Solar/Grid Scenario Analysis"])
+async def video_solar_grid_revalidate(payload: VideoReviewRequest):
+    """Recompute and check a fixed scenario before browser-local approval; no commands."""
+    try:
+        return review_video_dispatch(payload)
+    except LookupError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    except (OSError, KeyError) as error:
+        raise HTTPException(status_code=503, detail="Fixed demo verification is unavailable; the plan was not applied.") from error
 
 
 def get_chat_service(request: Request) -> GeminiChatService:

@@ -82,11 +82,18 @@ class EnergiOSApiClient {
   }
 
   async request(path, options = {}) {
-    const { timeoutMs = 8000, ...fetchOptions } = options;
+    const {
+      timeoutMs = 8000,
+      originFallback = true,
+      throwHttpErrors = false,
+      ...fetchOptions
+    } = options;
     const errors = [];
 
     // Try current baseUrl first, then remaining candidates
-    const urlsToTry = [this.baseUrl, ...this.fallbackCandidates.filter((u) => u !== this.baseUrl)];
+    const urlsToTry = originFallback
+      ? [this.baseUrl, ...this.fallbackCandidates.filter((u) => u !== this.baseUrl)]
+      : [this.baseUrl];
 
     for (const targetBase of urlsToTry) {
       const controller = new AbortController();
@@ -105,7 +112,9 @@ class EnergiOSApiClient {
         if (!response.ok) {
           const payload = await response.json().catch(() => ({}));
           const detail = typeof payload.detail === 'string' ? payload.detail : `HTTP ${response.status}`;
-          throw new Error(detail);
+          const httpError = new Error(detail);
+          httpError.status = response.status;
+          throw httpError;
         }
 
         const data = await response.json();
@@ -118,6 +127,7 @@ class EnergiOSApiClient {
         return data;
       } catch (err) {
         clearTimeout(timeoutId);
+        if (throwHttpErrors && Number.isInteger(err.status)) throw err;
         errors.push(`${targetBase}: ${err.message}`);
       }
     }
@@ -371,6 +381,41 @@ class EnergiOSApiClient {
   async getComparison(windowHours = 24) {
     const hours = Math.min(168, Math.max(1, Number(windowHours) || 24));
     return this.request(`/assets/comparison?window_hours=${hours}`);
+  }
+
+  async getSolarGridRecommendation(inputs) {
+    return this.request('/demo/solar-grid/recommendation', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(inputs),
+      timeoutMs: 12000,
+      originFallback: false,
+      throwHttpErrors: true,
+    });
+  }
+
+  async getVideoDispatch(assetId, afterHour = 0) {
+    return this.request('/demo/solar-grid/video/recommendation', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ asset_id: assetId, after_hour: afterHour }),
+      timeoutMs: 12000, originFallback: false, throwHttpErrors: true,
+    });
+  }
+
+  async reviewVideoDispatch(inputs) {
+    return this.request('/demo/solar-grid/video/revalidate', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(inputs), timeoutMs: 12000,
+      originFallback: false, throwHttpErrors: true,
+    });
+  }
+
+  async explainSolarGrid(recommendationId, transitionId) {
+    return this.request('/demo/solar-grid/explanation', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ recommendation_id: recommendationId, transition_id: transitionId }),
+      timeoutMs: 15000, originFallback: false, throwHttpErrors: true,
+    });
   }
 
   async chat(message, buildingId = null, history = []) {

@@ -157,7 +157,14 @@ class DynamicIslandController {
 
     try {
       let data = null;
-      if (window.apiClient && typeof window.apiClient.chat === 'function') {
+      if (/solar|grid|battery|dispatch|switch|power source|energy source/i.test(userQuery)) {
+        const approved = window.dispatchPlans?.forAsset(activeBuilding);
+        const card = window.dispatchPlans?.read().cards.slice().reverse().find(item => item.result.asset_id === activeBuilding);
+        const plan = approved || card;
+        if (!plan) throw new Error('No engine decision is available for this building. Calculate a scenario in the Township AI panel first.');
+        const explanation = await window.apiClient.explainSolarGrid(plan.result.recommendation_id, plan.transition.id);
+        data = { response: `${explanation.label}\n\n${explanation.explanation}\n\n${explanation.method}\n\nSources: BDG2 https://doi.org/10.5281/zenodo.3887306; Open-Meteo https://open-meteo.com/en/docs` };
+      } else if (window.apiClient && typeof window.apiClient.chat === 'function') {
         data = await window.apiClient.chat(userQuery, activeBuilding, this.history);
       } else {
         const baseUrl = (window.apiClient && window.apiClient.getBaseUrl()) || 'http://127.0.0.1:8000';
@@ -201,8 +208,8 @@ class DynamicIslandController {
       if (bubble) {
         bubble.innerHTML = `
           <div class="space-y-1.5">
-            <p><b>EnergiOS Telemetry Insight:</b> For <b>${this.escapeHtml(activeBuilding)}</b>, active draw is <b>185.0 kWh</b>. 24h baseline indicates expected demand of 165–200 kWh with an MAE accuracy of <b>22.07 kWh</b>.</p>
-            <p class="text-[10px] text-neutral-400">Public benchmark data — Building Data Genome Project 2 v1.0</p>
+            <p><b>Assistant unavailable:</b> ${this.escapeHtml(error.message || 'Please retry.')}</p>
+            <p class="text-[10px] text-neutral-400">Calculated engine reasons remain available in the Township AI panel. No plan has been applied by this request.</p>
           </div>
         `;
       }

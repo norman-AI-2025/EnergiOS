@@ -645,7 +645,7 @@
               <div>
                 <span class="text-sm font-bold text-[#1E2022] dark:text-white block">Electricity Tariff Rates</span>
                 <p class="text-xs text-[#71767B] mt-0.5 leading-relaxed">
-                  Translates metered kilowatt-hour telemetry into real currency costs and solar arbitrage savings across all charts.
+                  Estimates energy costs and solar scenario value using the assumptions entered below.
                 </p>
               </div>
 
@@ -843,8 +843,10 @@
     </div>
   </div>
 
+  <section data-dispatch-summary class="w-full max-w-[1540px] mx-auto mt-4 p-4 rounded-3xl border border-emerald-200 dark:border-emerald-900 text-sm space-y-2" aria-label="Approved dispatch scenario"></section>
+  <script src="src/js/dispatch_plans.js?v=6"></script>
   <!-- Controller Scripts -->
-  <script src="src/js/dynamic_island.js"></script>
+  <script src="src/js/dynamic_island.js?v=dispatch-1"></script>
   <script src="src/js/settings.js?v=2.2.0"></script>
 </body>
 </html>

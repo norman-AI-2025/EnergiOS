@@ -1,0 +1,52 @@
+{
+  "version": "video_solar_grid_v1",
+  "label": "Fixed demonstration inputs — scenario only, no live equipment control",
+  "demand": {
+    "source": "Building Data Genome Project 2 v1.0, bundled public benchmark history",
+    "doi": "https://doi.org/10.5281/zenodo.3887306",
+    "licence": "CC BY 4.0",
+    "snapshot_sha256": "f75131c84b6a77de9bd555dd1dbbe15a842028fac88d56c2a08c2f8777b0ebc0",
+    "note": "Replay of pinned historical whole-building readings, never current Sime Darby measurements. The existing seasonal model is fitted locally to the available history."
+  },
+  "weather": {
+    "source": "Authored fixed demo weather assumptions; no external weather request",
+    "scenario_date": "2026-10-19",
+    "timezone": "Asia/Kuala_Lumpur",
+    "radiation_w_m2": [0,0,0,0,0,0,0,80,220,450,650,800,900,850,700,500,280,100,20,0,0,0,0,0],
+    "cloud_cover_pct": [70,70,70,70,70,70,65,60,45,30,20,15,10,15,25,35,50,65,70,75,75,75,75,75],
+    "temperature_c": [25,25,25,25,25,25,26,27,28,29,30,31,32,32,31,30,29,28,27,26,26,26,25,25],
+    "note": "A fictional daylight profile and demo timezone, independent of the BDG2 site's timezone and historical forecast dates. Not an actual location forecast."
+  },
+  "inputs": {
+    "location_name": "Fictional video-demo site (not the BDG2 building)",
+    "latitude": 3.139,
+    "longitude": 101.6869,
+    "pv_capacity_kwp": 1200,
+    "pv_performance_ratio": 0.8,
+    "temperature_coefficient_per_c": 0.004,
+    "reference_temperature_c": 25,
+    "battery_capacity_kwh": 250,
+    "battery_soc_pct": 20,
+    "battery_reserve_pct": 20,
+    "max_charge_kw": 0,
+    "max_discharge_kw": 50,
+    "charge_efficiency": 0.92,
+    "discharge_efficiency": 0.92,
+    "grid_available": true,
+    "grid_price_per_kwh": 0.5,
+    "grid_price_currency": "MYR"
+  },
+  "assumptions": [
+    "PV size, performance and temperature coefficient are demonstration assumptions, not equipment measurements or vendor guarantees.",
+    "Battery starts at its 20% reserve. Charging is disabled in this walkthrough, so its reserve remains protected and Solar/Grid changes are easy to inspect.",
+    "MYR 0.50/kWh is an arbitrary flat demo tariff, not an applicable Malaysian tariff. Cost excludes CAPEX, battery charging, degradation and tariff schedules.",
+    "All weather values and the demonstration coordinates are fictional inputs. No relationship to the BDG2 asset location is asserted.",
+    "Changing these defaults requires a new version of this centrally maintained profile."
+  ],
+  "switch_policy": {
+    "solar_enter_ratio": 1.05,
+    "solar_exit_ratio": 0.95,
+    "confirmation_hours": 2,
+    "minimum_dwell_hours": 2
+  }
+}

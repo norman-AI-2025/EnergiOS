@@ -92,6 +92,9 @@ class EnergiOSTwinApp {
     this.renderBuildingPicker();
     this.renderFloorPicker();
 
+    // The dispatch panel uses a separate BDG2 asset picker and returns a scenario result.
+    this.initSolarGridSimulator();
+
     // 4. Initialize Live Energy Usage & Start Telemetry Loop
     this.updateLiveEnergyUsage();
     this.renderBuildingPowerDials();
@@ -100,8 +103,12 @@ class EnergiOSTwinApp {
     // 5. Initialize AI Copilot Chatbot & Agent Log
     this.initChatbot();
     this.renderAgentLogs();
-    this._startAgentLogLoop();
+    // Retain the inherited log examples as illustrative content, without generating fake live activity.
     this.applyInitialChatLayout();
+    window.addEventListener('energios:dispatch-updated', () => {
+      this.updateLiveEnergyUsage();
+      this.renderBuildingPowerDials();
+    });
 
     // 6. Theme change listener
     window.addEventListener('energios:theme-changed', (e) => {
@@ -149,6 +156,162 @@ class EnergiOSTwinApp {
       if (alertsTab) alertsTab.classList.add('hidden');
       if (island) island.classList.add('hidden');
     }
+  }
+
+  async initSolarGridSimulator() {
+    const form = document.getElementById('solar-grid-form');
+    const select = document.getElementById('solar-grid-asset');
+    if (!form || !select || !window.apiClient) return;
+
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      this.runSolarGridScenario();
+    });
+    document.getElementById('video-demo-run')?.addEventListener('click', () => this.runVideoDispatch());
+    document.getElementById('video-demo-reset')?.addEventListener('click', () => {
+      window.dispatchPlanUI?.resetVideoFeedback(select.value);
+      window.dispatchPlans?.resetVideoDemo(select.value);
+      this.runVideoDispatch();
+    });
+    const status = document.getElementById('solar-grid-status');
+    try {
+      const assets = await window.apiClient.getAssets();
+      const items = Array.isArray(assets?.items) ? assets.items : [];
+      if (!items.length) throw new Error('No BDG2 assets are available from the configured backend.');
+      select.innerHTML = items.map((asset) => (
+        `<option value="${this.escapeHtml(asset.id)}">${this.escapeHtml(asset.name)} · BDG2 public benchmark</option>`
+      )).join('');
+      if (status) status.textContent = 'BDG2 assets loaded. Running the fixed video demonstration…';
+      await this.runVideoDispatch();
+    } catch (error) {
+      if (status) status.textContent = `Could not load the scenario: ${error.message}. Check the backend and retry.`;
+    }
+  }
+
+  async runSolarGridScenario() {
+    const sequence = this._dispatchRequestSequence = (this._dispatchRequestSequence || 0) + 1;
+    const form = document.getElementById('solar-grid-form');
+    const status = document.getElementById('solar-grid-status');
+    const result = document.getElementById('solar-grid-result');
+    const button = document.getElementById('solar-grid-run');
+    if (!form || !window.apiClient) return;
+    const data = new FormData(form);
+    const optionalPrice = String(data.get('grid_price_per_kwh') || '').trim();
+    const payload = {
+      asset_id: data.get('asset_id'),
+      location_name: data.get('location_name'),
+      latitude: Number(data.get('latitude')),
+      longitude: Number(data.get('longitude')),
+      pv_capacity_kwp: Number(data.get('pv_capacity_kwp')),
+      pv_performance_ratio: Number(data.get('pv_performance_ratio')),
+      temperature_coefficient_per_c: Number(data.get('temperature_coefficient_per_c')),
+      reference_temperature_c: Number(data.get('reference_temperature_c')),
+      battery_capacity_kwh: Number(data.get('battery_capacity_kwh')),
+      battery_soc_pct: Number(data.get('battery_soc_pct')),
+      battery_reserve_pct: Number(data.get('battery_reserve_pct')),
+      max_charge_kw: Number(data.get('max_charge_kw')),
+      max_discharge_kw: Number(data.get('max_discharge_kw')),
+      charge_efficiency: Number(data.get('charge_efficiency')),
+      discharge_efficiency: Number(data.get('discharge_efficiency')),
+      grid_available: data.get('grid_available') === 'on',
+      grid_price_per_kwh: optionalPrice === '' ? null : Number(optionalPrice),
+      grid_price_currency: data.get('grid_price_currency') || 'user-entered',
+    };
+    if (status) status.textContent = 'Requesting current hourly weather and calculating a dispatch scenario…';
+    if (result) result.classList.add('hidden');
+    if (button) {
+      button.disabled = true;
+      button.textContent = 'Calculating…';
+    }
+    try {
+      const response = await window.apiClient.getSolarGridRecommendation(payload);
+      if (sequence !== this._dispatchRequestSequence) return;
+      this.renderSolarGridRecommendation(response);
+      if (status) status.textContent = 'Scenario estimate — no live equipment control. Calculated transitions are in the AI panel; review before approval.';
+    } catch (error) {
+      if (sequence !== this._dispatchRequestSequence) return;
+      if (status) status.textContent = `Recommendation unavailable: ${error.message}. Your inputs are kept; retry when the backend/weather service is available.`;
+    } finally {
+      if (button) {
+        button.disabled = false;
+        button.textContent = 'Calculate scenario recommendation';
+      }
+    }
+  }
+
+  async runVideoDispatch() {
+    const select = document.getElementById('solar-grid-asset');
+    const status = document.getElementById('solar-grid-status');
+    const button = document.getElementById('video-demo-run');
+    if (!select?.value || !window.apiClient) return;
+    const sequence = this._dispatchRequestSequence = (this._dispatchRequestSequence || 0) + 1;
+    const plan = window.dispatchPlans?.forAsset(select.value);
+    const afterHour = plan?.result?.video_demo ? plan.transition.hour_index : 0;
+    if (button) button.disabled = true;
+    if (status) status.textContent = 'Running pinned demand forecast, fixed demo PV and reserve-aware dispatch…';
+    try {
+      const response = await window.apiClient.getVideoDispatch(select.value, afterHour);
+      if (sequence !== this._dispatchRequestSequence) return;
+      this.renderSolarGridRecommendation(response);
+      if (status) status.textContent = response.transitions.length
+        ? `${response.video_demo.version} · Fixed demo inputs. Next calculated source change is in the AI panel. Approve applies browser-local scenario state only.`
+        : `${response.video_demo.version} · This walkthrough is complete. Restart fixed demo to replay its calculated transitions.`;
+    } catch (error) {
+      if (sequence === this._dispatchRequestSequence && status) status.textContent = `Fixed demo unavailable: ${error.message}. No plan was applied; retry.`;
+    } finally {
+      if (button) button.disabled = false;
+    }
+  }
+
+  renderSolarGridRecommendation(data) {
+    if (!data || !window.dispatchPlans) return;
+    this._latestDispatch = data;
+    const count = window.dispatchPlans.enqueue(data);
+    window.dispatchPlanUI?.renderCards();
+    const result = document.getElementById('solar-grid-result');
+    if (result) result.classList.add('hidden');
+    if (count > 0) {
+      this.setAiViewMode('chat');
+      if (document.getElementById('twin-ai-chat-card')?.classList?.contains?.('hidden')) this.restoreAiChat();
+      this.showToast(`${count} new calculated transition(s) in the AI panel · scenario only`);
+    }
+  }
+
+  applyApprovedDispatch() {
+    const plan = this.state.selectedBuildingId
+      ? this.getVisualDispatch(this.state.selectedBuildingId) : window.dispatchPlans?.active();
+    if (!plan) return false;
+    const r = plan.result, h = r.hours[plan.transition.hour_index];
+    const impact = window.dispatchPlans.impact(plan);
+    this.state.liveTelemetry = {
+      totalDemandKw: h.demand_forecast_kwh, solarGenKw: h.solar_to_load_kwh,
+      gridImportKw: h.grid_to_load_kwh, bessPowerKw: h.battery_to_load_kwh,
+      solarSharePct: h.demand_forecast_kwh ? h.solar_to_load_kwh / h.demand_forecast_kwh * 100 : 0,
+      gridSharePct: h.demand_forecast_kwh ? h.grid_to_load_kwh / h.demand_forecast_kwh * 100 : 0,
+      label: 'Scenario estimate — no live control',
+    };
+    this.setText('dispatch-township-demand', `${h.demand_forecast_kwh.toFixed(1)} kW avg`);
+    this.setText('dispatch-township-solar', `${h.solar_to_load_kwh.toFixed(1)} kW to load`);
+    this.setText('dispatch-township-battery', `${h.battery_soc_kwh.toFixed(1)} / ${r.assumptions.battery_capacity_kwh} kWh`);
+    this.setText('dispatch-township-label', `Scenario estimate · ${r.asset_name} · ${h.weather_timestamp} · geometry illustrative`);
+    this.setText('live-total-demand', `${h.demand_forecast_kwh.toFixed(1)} kW avg · scenario`);
+    this.setText('live-solar-val', h.solar_to_load_kwh.toFixed(1));
+    this.setText('live-grid-val', h.grid_to_load_kwh.toFixed(1));
+    this.setText('live-active-status-text', `Scenario source: ${h.source} · ${h.weather_timestamp}`);
+    this.setText('live-source-status-text', 'Approved scenario only');
+    this.setText('live-cost-rate', impact.gridCost === null ? 'Not available' : `${impact.currency} ${impact.gridCost.toFixed(2)} / scenario 24h`);
+    this.setText('live-avoided-rate', impact.costAvoided === null ? 'Not available' : `${impact.currency} ${impact.costAvoided.toFixed(2)} estimated cost saved / scenario 24h`);
+    this.setText('live-carbon-rate', 'Not available · no factor configured');
+    window.dispatchPlanUI?.renderSummary();
+    return true;
+  }
+
+  getVisualDispatch(buildingId) {
+    // Explicit illustrative UI aliases; these are not measured BDG2 spatial mappings.
+    const names = { 'commercial-mall': 'Hog_office_Bill', 'innovation-hub': 'Hog_assembly_Dona',
+      'community-center': 'Hog_education_Donnie', 'sports-arena': 'Hog_lodging_Francisco' };
+    const name = names[this._resolveBuildingId(buildingId)];
+    return Object.values(window.dispatchPlans?.read().approved || {}).find(plan => plan.result.asset_name === name) || null;
   }
 
   // ==========================================
@@ -1184,6 +1347,11 @@ class EnergiOSTwinApp {
   // ==========================================
 
   updateLiveEnergyUsage() {
+    if (this.applyApprovedDispatch()) return;
+    this.setText('dispatch-township-demand', 'Illustrative');
+    this.setText('dispatch-township-solar', 'No approved plan');
+    this.setText('dispatch-township-battery', 'No approved plan');
+    this.setText('dispatch-township-label', 'Illustrative geometry · no live control');
     const bId = this._resolveBuildingId(this.state.selectedBuildingId);
     let totalDemand = 186.4;
     let solarGen = 92.0;
@@ -1206,7 +1374,7 @@ class EnergiOSTwinApp {
     const solarShare = Math.min(100, Math.round((solarGen / Math.max(totalDemand, 0.1)) * 1000) / 10);
     const gridShare = Math.min(100, Math.round((gridImport / Math.max(totalDemand, 0.1)) * 1000) / 10);
 
-    // Cost rate under TNB Commercial C1 Peak Rate (RM 0.584/kWh)
+    // Legacy illustrative scenario rate; this is not an applicable tariff quote.
     const costRate = Math.round(gridImport * this.tnbTariff.peakRateMyr * 100) / 100;
     const costAvoided = Math.round(solarGen * this.tnbTariff.peakRateMyr * 100) / 100;
     const carbonRate = Math.round(gridImport * this.tnbTariff.gridFactorKgCo2PerKwh * 10) / 10;
@@ -1229,7 +1397,7 @@ class EnergiOSTwinApp {
     this.setText('live-grid-val', `${gridImport.toFixed(1)}`);
     this.setText('live-grid-share', `${gridShare}% of building load`);
     this.setText('live-cost-rate', `RM ${costRate.toFixed(2)} / hr`);
-    this.setText('live-avoided-rate', `-RM ${costAvoided.toFixed(2)} / hr`);
+    this.setText('live-avoided-rate', `Illustrative cost saved: RM ${costAvoided.toFixed(2)} / hr`);
     this.setText('live-carbon-rate', `${carbonRate.toFixed(1)} kg CO₂/hr`);
     this.setText('live-self-sufficiency-tag', `☀️ ${solarShare}% Solar · ⚡ ${gridShare}% Grid`);
 
@@ -1267,6 +1435,10 @@ class EnergiOSTwinApp {
 
   setBuildingEnergySource(buildingId, source, event) {
     if (event) event.stopPropagation();
+    if (this.getVisualDispatch(buildingId)) {
+      this.showToast('This preview follows an approved engine plan. Edit scenario inputs and review a new plan to change it.');
+      return;
+    }
     if (!this.state.buildingSources) this.state.buildingSources = {};
     const resolvedId = this._resolveBuildingId(buildingId);
     this.state.buildingSources[buildingId] = source;
@@ -1306,6 +1478,8 @@ class EnergiOSTwinApp {
 
     let html = '';
     buildings.forEach((b) => {
+      const plan = this.getVisualDispatch(b.id);
+      const appliedHour = plan?.result.hours[plan.transition.hour_index];
       const isSelected = this._resolveBuildingId(this.state.selectedBuildingId) === b.id;
       const isSolar = (this.state.buildingSources[b.id] || 
                        this.state.buildingSources[this._resolveBuildingId(b.id)] || 
@@ -1315,6 +1489,7 @@ class EnergiOSTwinApp {
       if (isSelected && this.state.liveTelemetry?.totalDemandKw && (b.id === 'innovation-hub' || b.id === 'fox-hub')) {
         currentDemand = this.state.liveTelemetry.totalDemandKw;
       }
+      if (appliedHour) currentDemand = appliedHour.demand_forecast_kwh;
 
       html += `
         <div onclick="twinApp.selectBuilding('${b.id}')" class="p-3 lg:p-3.5 rounded-2xl bg-white dark:bg-[#162030] border ${isSelected ? 'border-[#FF7A00] ring-2 ring-[#FF7A00]/40 shadow-lg bg-orange-50/20 dark:bg-orange-950/25 scale-[1.01]' : 'border-slate-200/80 dark:border-neutral-800'} hover:border-[#FF7A00] dark:hover:border-[#FF7A00] cursor-pointer transition-all flex flex-col justify-between shadow-2xs group min-w-0" title="Click meter to zoom in ${b.name} on 3D">
@@ -1323,7 +1498,7 @@ class EnergiOSTwinApp {
           <div class="flex items-center justify-between gap-1 pb-1">
             <div class="flex items-center gap-1.5 min-w-0">
               <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color: ${b.accent}"></span>
-              <h3 class="text-xs lg:text-sm font-bold text-[#1E2022] dark:text-white font-sans truncate">${b.name}</h3>
+              <h3 class="text-xs lg:text-sm font-bold text-[#1E2022] dark:text-white font-sans truncate">${b.name} · Illustrative alias</h3>
             </div>
             ${b.anomaly ? '<span class="text-[8px] font-bold px-1.5 py-0.5 rounded-full bg-red-600 text-white font-mono animate-pulse shrink-0 flex items-center gap-1 shadow-xs"><svg viewBox="0 0 200 180" class="w-2.5 h-2.5 shrink-0" fill="none"><path d="M 90.5 17.5 C 94.8 9.8 105.2 9.8 109.5 17.5 L 191.5 146.5 C 196.2 153.9 190.8 163.5 182.0 163.5 L 18.0 163.5 C 9.2 163.5 3.8 153.9 8.5 146.5 Z" fill="#FFFFFF"/><path d="M 100 55 L 100 105" stroke="#EE272C" stroke-width="20" stroke-linecap="round"/><circle cx="100" cy="132" r="10" fill="#EE272C"/></svg> ALERT</span>' : ''}
           </div>
@@ -1344,7 +1519,7 @@ class EnergiOSTwinApp {
           <div class="flex items-center justify-center pt-1.5 mt-auto" onclick="event.stopPropagation()">
             <button onclick="twinApp.toggleBuildingEnergySource('${b.id}', event)" class="px-2.5 py-1 rounded-full text-[10px] font-bold font-mono transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs ${isSolar ? 'bg-emerald-50 dark:bg-emerald-950/80 border border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/60' : 'bg-blue-50 dark:bg-blue-950/80 border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/60'}" title="Click to toggle between Solar & Grid">
               <span class="w-1.5 h-1.5 rounded-full ${isSolar ? 'bg-[#22C55E] animate-pulse' : 'bg-[#2563EB] animate-pulse'}"></span>
-              <span>${isSolar ? '☀️ Solar' : '⚡ Grid'}</span>
+              <span>${appliedHour ? `Scenario ${appliedHour.source}` : `Illustrative ${isSolar ? 'Solar' : 'Grid'}`}</span>
             </button>
           </div>
 
@@ -1356,10 +1531,12 @@ class EnergiOSTwinApp {
 
     // Render radial speedometer ticks for each building (42 ticks, matching index.html 100%)
     buildings.forEach((b) => {
+      const plan = this.getVisualDispatch(b.id);
       let currentDemand = b.demandKw;
       if (this._resolveBuildingId(this.state.selectedBuildingId) === b.id && this.state.liveTelemetry?.totalDemandKw && (b.id === 'innovation-hub' || b.id === 'fox-hub')) {
         currentDemand = this.state.liveTelemetry.totalDemandKw;
       }
+      if (plan) currentDemand = plan.result.hours[plan.transition.hour_index].demand_forecast_kwh;
       const isSolar = (this.state.buildingSources[b.id] || 
                        this.state.buildingSources[this._resolveBuildingId(b.id)] || 
                        (b.id === 'innovation-hub' || b.id === 'sports-arena' ? 'solar' : 'grid')) === 'solar';
@@ -1415,20 +1592,8 @@ class EnergiOSTwinApp {
   // ==========================================
 
   initChatbot() {
-    this.state.chatMessages = [
-      {
-        sender: 'copilot',
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        text: `Hello! I'm monitoring the 3D Digital Twin and live SCADA microgrid. 
-
-I've detected a **High-Severity Anomaly** on **Fox Hub Level 2** (AHU Chilled Water Valve stuck 98% open, drawing **+28.4 kW** above expected baseline). 
-
-Clean on-site **Solar Generation** is currently supplying **49.4%** of building load, with the remaining **50.6%** drawn from the **TNB Grid**.
-
-You can ask me to analyze the anomaly, execute a peak-load shed, or upload your custom ML model file anytime.`
-      }
-    ];
-
+    this.state.chatMessages = [{ sender: 'copilot', time: '', text:
+      'Dispatch reports below come from the calculation engine. Approve previews a shared local scenario; Dismiss leaves the applied plan unchanged. Gemini can explain the engine reasons. BDG2 is public benchmark data; geometry is illustrative. No live equipment control.' }];
     this.renderChatMessages();
   }
 
@@ -1436,7 +1601,7 @@ You can ask me to analyze the anomaly, execute a peak-load shed, or upload your 
     const container = document.getElementById('chat-messages-container');
     if (!container) return;
 
-    let html = '';
+    let html = '<div id="dispatch-recommendation-cards" class="space-y-3"></div>';
     this.state.chatMessages.forEach((msg) => {
       const isUser = msg.sender === 'user';
       if (isUser) {
@@ -1490,7 +1655,8 @@ You can ask me to analyze the anomaly, execute a peak-load shed, or upload your 
     }
 
     container.innerHTML = html;
-    container.scrollTop = container.scrollHeight;
+    window.dispatchPlanUI?.renderCards();
+    container.scrollTop = 0;
   }
 
   sendPresetPrompt(promptText) {
@@ -1507,115 +1673,28 @@ You can ask me to analyze the anomaly, execute a peak-load shed, or upload your 
     this.sendUserMessage(text);
   }
 
-  sendUserMessage(text) {
-    const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    this.state.chatMessages.push({ sender: 'user', time: timeStr, text });
+  async sendUserMessage(text) {
+    if (this.state.isChatTyping) return;
+    this.state.chatMessages.push({ sender: 'user', time: '', text });
     this.state.isChatTyping = true;
     this.renderChatMessages();
-
-    // Generate intelligent AI response after short realistic reasoning delay
-    setTimeout(() => {
-      const response = this.generateAIResponse(text);
-      this.state.isChatTyping = false;
-      this.state.chatMessages.push({
-        sender: 'copilot',
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        text: response.text,
-        actionHtml: response.actionHtml
-      });
-      this.renderChatMessages();
-    }, 750);
-  }
-
-  generateAIResponse(query) {
-    const q = query.toLowerCase();
-    const bId = this.state.selectedBuildingId || 'fox-hub';
-    const b = this.buildingsData[bId];
-    const solarKw = this.state.liveTelemetry.solarGenKw;
-    const gridKw = this.state.liveTelemetry.gridImportKw;
-    const isCustomModel = window.energiosML.isLoaded;
-    const modelTag = isCustomModel ? `🧠 *Inference via uploaded model (${window.energiosML.modelName})*:\n\n` : '';
-
-    if (q.includes('level 2') || q.includes('2nd floor') || q.includes('valve') || q.includes('surge') || q.includes('anomaly')) {
-      return {
-        text: `${modelTag}**Diagnostic Report: Fox Hub Level 2 Anomaly (ANOM-7421)**
-
-• **Equipment**: AHU-02-TECH Chilled Water 2-Way Modulating Valve
-• **Telemetry**: Space temp has drifted to **22.8°C** (+0.3°C), with valve actuator command locked at **98% open**.
-• **Energy Impact**: Interval draw is **114.0 kW** vs model expected baseline **85.6 kW** (+**28.4 kW** surge / +42.1%).
-• **TNB C1 Cost Impact**: Generating **+RM 16.59/hour** in avoidable grid utility spend during the commercial peak tariff window.
-
-**Recommendation**:
-Force valve override to **60%**, step setpoint to **24.0°C**, and verify differential pressure transducer feedback.`,
-        actionHtml: `
-          <div class="flex flex-wrap gap-2 pt-1">
-            <button onclick="twinApp.selectFloor('l2')" class="px-3 py-1 rounded-xl bg-orange-100 dark:bg-orange-950 text-[#FF7A00] hover:bg-orange-200 border border-orange-300 dark:border-orange-800 text-[11px] font-semibold flex items-center gap-1 transition-colors">
-              <span class="material-symbols-outlined text-[14px]">view_in_ar</span> Focus Level 2 in 3D
-            </button>
-            <button onclick="twinApp.applySetback('l2', 24.0)" class="px-3 py-1 rounded-xl bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-200 border border-emerald-300 dark:border-emerald-800 text-[11px] font-semibold flex items-center gap-1 transition-colors">
-              <span class="material-symbols-outlined text-[14px]">thermostat</span> Override Valve to 60%
-            </button>
-          </div>
-        `
-      };
-    }
-
-    if (q.includes('solar') || q.includes('grid') || q.includes('balance') || q.includes('maximize')) {
-      return {
-        text: `${modelTag}**Live Solar vs Grid Balance Strategy**:
-
-• **Current Solar Output**: **${solarKw} kW** (49.4% clean renewable share).
-• **Grid Draw**: **${gridKw} kW** under TNB C1 Peak Rate (RM 0.584 / kWh).
-• **Self-Sufficiency Index**: Currently at **49.4%**. 
-
-**Optimization Opportunities**:
-1. Pre-cool Level 1 & Level 3 zones during peak solar generation (12:00 - 14:30 MYT) to build thermal storage before afternoon grid peak.
-2. Divert 15 kW of surplus PV generation into BESS storage to avoid exporting zero-feed-in tariff energy.`,
-        actionHtml: `
-          <div class="flex flex-wrap gap-2 pt-1">
-            <button onclick="twinApp.showToast('Solar peak self-consumption protocol activated')" class="px-3 py-1 rounded-xl bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-300 text-[11px] font-semibold">
-              ⚡ Activate Solar Priority Mode
-            </button>
-          </div>
-        `
-      };
-    }
-
-    if (q.includes('cost') || q.includes('tariff') || q.includes('saving') || q.includes('tnb')) {
-      return {
-        text: `${modelTag}**TNB C1 Commercial Tariff Breakdown**:
-
-• **Current Grid Tariff**: **RM 0.584 per kWh** (Peak Band: 08:00 - 22:00).
-• **Current Grid Cost Rate**: **RM ${this.state.liveTelemetry.costRateMyr.toFixed(2)} / hour**.
-• **Clean Solar Savings Rate**: Avoided **RM ${this.state.liveTelemetry.costAvoidedMyr.toFixed(2)} / hour** by generating ${solarKw} kW clean solar.
-• **Projected Daily Avoided Cost**: ~**RM 6,482.40** across monitored township assets.`,
-        actionHtml: ''
-      };
-    }
-
-    if (q.includes('shed') || q.includes('setback') || q.includes('mitigate')) {
-      return {
-        text: `${modelTag}**Load Shedding Simulation**:
-
-Initiating a **25.0 kW** demand curtailment on Level 2 will drop grid import from **${gridKw} kW** to **${(gridKw - 25).toFixed(1)} kW**, eliminating the anomaly flag and saving **RM 14.60 / hour** under peak tariff rates.`,
-        actionHtml: `
-          <button onclick="twinApp.applySetback('l2', 24.5)" class="px-3 py-1 rounded-xl bg-orange-100 dark:bg-orange-950 text-[#FF7A00] border border-orange-300 text-[11px] font-semibold">
-            Execute 25 kW Shedding on L2
-          </button>
-        `
-      };
-    }
-
-    return {
-      text: `${modelTag}I've analyzed your telemetry request for **${b?.name || 'the microgrid'}**.
-
-• **Total Power**: **${this.state.liveTelemetry.totalDemandKw.toFixed(1)} kW** (Solar: **${solarKw} kW** · Grid: **${gridKw} kW**).
-• **Active Anomaly**: Fox Hub Level 2 valve passing (+28.4 kW surge).
-• **Machine Learning Model**: ${window.energiosML.modelName}.
-
-How would you like to proceed? You can ask me to inspect specific floors, analyze tariff rates, or upload a custom ML file.`,
-      actionHtml: ''
-    };
+    let response;
+    try {
+      if (/solar|grid|battery|dispatch|switch|plan/i.test(text)) {
+        const cards = window.dispatchPlans?.read().cards || [];
+        const card = cards[cards.length - 1];
+        if (card) {
+          await window.dispatchPlanUI.explain(card.id);
+          response = 'See the Gemini explanation on the calculated dispatch report above. Approve or Dismiss there; chat never applies a plan.';
+        } else response = 'No calculated dispatch transition is available. Refresh the scenario inputs to ask the engine first.';
+      } else {
+        const reply = await window.apiClient.chat(text, this._latestDispatch?.asset_id || null);
+        response = reply.response;
+      }
+    } catch (_) { response = 'Assistant unavailable; retry. Calculated engine reports remain available.'; }
+    this.state.isChatTyping = false;
+    this.state.chatMessages.push({ sender: 'copilot', time: '', text: response });
+    this.renderChatMessages();
   }
 
   applySetback(floorId, targetC) {

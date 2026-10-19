@@ -51,7 +51,7 @@
 
   <!-- Verified Backend & BDG2 Telemetry Sync -->
   <script src="src/data/bdg2_data.js"></script>
-  <script src="src/js/api.js"></script>
+  <script src="src/js/api.js?v=dispatch-3"></script>
 </head>
 
 <body class="bg-[#FAF8F5] text-[#1E2022] antialiased min-h-screen flex flex-col p-6 lg:p-8 selection:bg-orange-100 selection:text-orange-900">
@@ -314,7 +314,7 @@
                 <span id="metric-total-val" class="text-3xl lg:text-4xl font-extrabold text-[#1E2022] tracking-tight">4,440</span>
                 <span class="text-xs font-semibold text-[#71767B]">kWh</span>
               </div>
-              <span id="metric-total-delta" class="text-xs font-semibold text-[#22C55E] mt-1 block">+12.4% vs 24h prior</span>
+              <span id="metric-total-delta" class="text-xs font-semibold text-[#22C55E] mt-1 block">Estimated grid electricity saved: Not available</span>
             </div>
 
             <!-- Metric 2: Current Demand -->
@@ -324,7 +324,7 @@
                 <span id="metric-current-val" class="text-3xl lg:text-4xl font-extrabold text-[#1E2022] tracking-tight">185.0</span>
                 <span class="text-xs font-semibold text-[#71767B]">kWh</span>
               </div>
-              <span id="metric-current-status" class="text-xs font-semibold text-[#22C55E] mt-1 block">Observed interval</span>
+              <span id="metric-current-status" class="text-xs font-semibold text-[#22C55E] mt-1 block">Estimated grid purchase cost saved: Not available</span>
             </div>
 
             <!-- Metric 3: Forecast Error (MAE) -->
@@ -334,9 +334,29 @@
                 <span id="metric-export-val" class="text-3xl lg:text-4xl font-extrabold text-[#1E2022] tracking-tight">22.07</span>
                 <span class="text-xs font-semibold text-[#71767B]">kWh</span>
               </div>
-              <span id="metric-export-delta" class="text-xs font-semibold text-[#22C55E] mt-1 block">+23.9% vs Baseline</span>
+              <span id="metric-export-delta" class="text-xs font-semibold text-[#22C55E] mt-1 block">Forecast accuracy improvement: Not available</span>
             </div>
           </div>
+          <details class="text-xs text-[#71767B] mt-3">
+            <summary class="cursor-pointer font-semibold">KPI estimate assumptions and sources</summary>
+            <p class="mt-2">Demand source: <a class="underline" href="https://doi.org/10.5281/zenodo.3887306" target="_blank" rel="noreferrer">BDG2 v1.0 public benchmark</a>. Weather is either the explicitly identified fixed demo profile or <a class="underline" href="https://open-meteo.com/en/docs" target="_blank" rel="noreferrer">Open-Meteo</a> for a separate demo location; see Applied scenario inputs for the actual source. Each building uses its own forecast. An approved plan takes priority; otherwise a preview uses the active plan's shared solar/battery assumptions, or the engine's disclosed demo defaults. Preview calculation does not approve or apply a plan. Edit inputs in the Township AI panel.</p>
+            <p id="kpi-estimate-evidence" class="mt-2" aria-live="polite">Energy comparison: Not available.</p>
+            <p id="kpi-observed-comparison" class="mt-2"></p>
+            <button id="kpi-scenario-retry" type="button" class="mt-2 underline font-semibold">Refresh selected building estimate</button>
+            <details class="mt-2"><summary class="cursor-pointer">Applied scenario inputs and weather source</summary><pre id="kpi-scenario-inputs" class="whitespace-pre-wrap break-words mt-2">Inputs will appear after calculation.</pre></details>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+              <label>Optional flat tariff assumption (RM/kWh)
+                <input id="kpi-tariff" type="number" min="0" step="any" placeholder="Not configured" class="block w-full rounded-lg border border-slate-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-2 mt-1" />
+              </label>
+              <label>Optional emissions assumption (kg CO₂e/kWh)
+                <input id="kpi-emissions" type="number" min="0" step="any" placeholder="Not configured" class="block w-full rounded-lg border border-slate-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-2 mt-1" />
+              </label>
+            </div>
+            <p class="mt-2">Estimated grid electricity saved = scenario solar-to-load + battery-to-load across the complete 24-hour plan. Percentage = estimated grid kWh saved ÷ ML-forecast demand kWh × 100. Compare with all-grid supply of the same demand; total building energy need does not decrease. Grid outages or unmet demand are not counted as savings.</p>
+            <p class="mt-2">Estimated grid purchase cost saved = estimated grid kWh saved × configured RM/kWh. The optional KPI tariff overrides valuation only; otherwise this scenario's RM/MYR price is used. Other currencies are not converted. User assumptions are saved in this browser; clear a field to remove it. No applicable tariff or official emissions factor is assumed. Costs exclude initial battery charging, degradation, CAPEX and tariff schedules. Carbon is calculated only with an entered factor, credits direct solar-to-load only, and excludes battery discharge because its charging source is unverified. Previews are cached for up to 15 minutes per building and input set; Refresh requests a new calculation. Approved plans retain their captured results.</p>
+            <p class="mt-2 font-semibold">Scenario estimate — no live control. ML predicts demand; dispatch and estimated grid-purchase savings are calculated from scenario assumptions. No savings probability, confidence guarantee or verified savings is available. Historical benchmark demand and demo weather have independent timelines.</p>
+            <p class="mt-2">Accuracy improvement = baseline model test MAE − forecast model test MAE; percentage uses baseline MAE on the same test sample count. These are evaluation results, not savings.</p>
+          </details>
         </div>
 
         <!-- Right Column: PHOTO OF BUILDING WITH ROOFTOP SOLAR (5 cols) -->
@@ -508,7 +528,7 @@
                   Level & Rates
                 </span>
               </div>
-              <p class="text-xs text-[#71767B] dark:text-slate-400 mt-0.5">24-hour State of Charge (SOC) profile with active Charge, Store & Discharge telemetry</p>
+              <p id="battery-operations-note" class="text-xs text-[#71767B] dark:text-slate-400 mt-0.5">Scenario battery profile — approved dispatch plan when available; otherwise illustrative demo. No measured battery data.</p>
             </div>
 
             <!-- View Toggle: Chart vs Table -->
@@ -590,7 +610,7 @@
           <div class="flex items-center justify-between mb-2">
             <div>
               <h2 class="text-base font-bold text-[#1E2022] dark:text-white">Battery Storage</h2>
-              <p class="text-xs text-[#71767B] dark:text-slate-400">BESS capacity & power telemetry</p>
+              <p class="text-xs text-[#71767B] dark:text-slate-400">Scenario battery assumptions — no live control</p>
             </div>
             <span id="battery-status-tag" class="text-xs font-semibold text-[#22C55E] bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-0.5 rounded-full border border-emerald-200/50 dark:border-emerald-800/60 font-mono">
               ⚡ Charging
@@ -638,8 +658,10 @@
     </div>
   </div>
 
+  <section data-dispatch-summary class="w-full max-w-[1540px] mx-auto mt-4 p-4 rounded-3xl border border-emerald-200 dark:border-emerald-900 text-sm space-y-2" aria-label="Approved dispatch scenario"></section>
+  <script src="src/js/dispatch_plans.js?v=6"></script>
   <!-- Controller Scripts -->
-  <script src="src/js/dynamic_island.js"></script>
-  <script src="src/js/velora_app.js?v=2.3.0"></script>
+  <script src="src/js/dynamic_island.js?v=dispatch-1"></script>
+  <script src="src/js/velora_app.js?v=2.3.6"></script>
 </body>
 </html>

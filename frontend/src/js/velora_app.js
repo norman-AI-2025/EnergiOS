@@ -15,6 +15,8 @@ class EnergiOSDashboard {
     this.energyChart = null;
     this.batteryOperationsChart = null;
     this.batteryActiveView = 'chart';
+    this.kpiScenarios = new Map();
+    this.selectionSequence = 0;
   }
 
   async init() {
@@ -101,6 +103,7 @@ class EnergiOSDashboard {
   }
 
   async selectBuilding(assetId) {
+    const selection = ++this.selectionSequence;
     this.state.activeBuildingId = assetId;
     this.renderBuildingPicker();
     this.setLoading(true);
@@ -116,6 +119,7 @@ class EnergiOSDashboard {
         window.apiClient.getForecast(asset.id),
         window.apiClient.getAnomalies(asset.id, { limit: 100 }),
       ]);
+      if (selection !== this.selectionSequence) return;
       if (!Array.isArray(readings?.items) || !Array.isArray(forecast?.items) || !Array.isArray(anomalies?.items)) {
         throw new Error('The backend returned an unexpected analytics response.');
       }
@@ -155,7 +159,9 @@ class EnergiOSDashboard {
           ? 'Live API Connected'
           : 'Public Benchmark Snapshot';
       this.setApiStatus(true, statusLabel);
+      void this.loadKpiScenario(asset.id);
     } catch (error) {
+      if (selection !== this.selectionSequence) return;
       console.warn('[EnergiOS Dashboard] selectBuilding error:', error);
       this.state.currentBuilding = null;
       this.state.readings = null;
@@ -164,7 +170,7 @@ class EnergiOSDashboard {
       this.setApiStatus(false, 'Data unavailable');
       this.setUnavailable(error.message);
     } finally {
-      this.setLoading(false);
+      if (selection === this.selectionSequence) this.setLoading(false);
     }
   }
 
@@ -204,40 +210,21 @@ class EnergiOSDashboard {
 
     const currentWindow = this.getCompleteHourlyWindow(readings, readings.length - 1)
       || (last24.length >= 24 ? last24 : readings);
-    const previousWindow = readings.length >= 48
-      ? (this.getCompleteHourlyWindow(readings, readings.length - 25) || readings.slice(-48, -24))
-      : null;
-
     const total24 = currentWindow.reduce((sum, row) => sum + row.consumption_kwh, 0);
-    const previousTotal24 = previousWindow ? previousWindow.reduce((sum, row) => sum + row.consumption_kwh, 0) : null;
     const max24 = Math.max(...last24.map((row) => row.consumption_kwh), latest.consumption_kwh);
     const min24 = Math.min(...last24.map((row) => row.consumption_kwh), latest.consumption_kwh);
     const avg24 = last24.length ? last24.reduce((sum, row) => sum + row.consumption_kwh, 0) / last24.length : latest.consumption_kwh;
 
     const modelMetric = this.state.forecast?.test_metrics?.model;
-    const baselineMetric = this.state.forecast?.test_metrics?.baseline;
     const maePctOfRecentMean = modelMetric && avg24 > 0 ? (modelMetric.mae_kwh / avg24) * 100 : null;
 
     // Hero 3 Metrics
     this.setText('metric-total-val', this.formatNumber(total24, 0));
-    if (previousTotal24 && previousTotal24 > 0) {
-      const delta = ((total24 - previousTotal24) / previousTotal24) * 100;
-      const sign = delta >= 0 ? '+' : '';
-      this.setText('metric-total-delta', `${sign}${delta.toFixed(1)}% vs prior 24h`);
-    } else {
-      this.setText('metric-total-delta', 'Prior 24h baseline compared');
-    }
 
     this.setText('metric-current-val', this.formatNumber(latest.consumption_kwh, 1));
-    this.setText('metric-current-status', `Observed interval · ${this.formatDate(latest.timestamp)}`);
 
     this.setText('metric-export-val', modelMetric ? this.formatNumber(modelMetric.mae_kwh, 2) : '22.07');
-    this.setText(
-      'metric-export-delta',
-      modelMetric && baselineMetric
-        ? `Baseline MAE ${this.formatNumber(baselineMetric.mae_kwh, 2)} kWh`
-        : '+23.9% vs Baseline'
-    );
+    this.renderKpiContext();
 
     // Power Demand Dial
     this.setText('dial-power-val', this.formatNumber(latest.consumption_kwh, 1));
@@ -317,6 +304,217 @@ class EnergiOSDashboard {
 
     this.setText('forecast-coverage-label', `${forecasts.length || 24} forecast intervals returned`);
     this.renderPowerDialTicks(latest.consumption_kwh, max24);
+  }
+
+  calculateKpiContext(readings, forecast, assumptions = {}) {
+    const result = { energySavedKwh: null, energySavedPct: null, costAvoidedRm: null,
+      carbonAvoidedKg: null, maeImprovementKwh: null, maeImprovementPct: null };
+    // Rolling windows must contain the same 24 hourly positions, without gaps or fills.
+    const rows = [...readings].sort((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp)).slice(-48);
+    const valid = rows.length === 48 && rows.every((row, i) => (
+      Number.isFinite(Date.parse(row.timestamp)) && Number.isFinite(row.consumption_kwh)
+      && row.consumption_kwh >= 0 && row.interval_minutes === 60
+      && row.label === 'observed' && row.quality_status === 'observed'
+      && (i === 0 || Date.parse(row.timestamp) - Date.parse(rows[i - 1].timestamp) === 3600000)
+    ));
+    if (valid) {
+      const baseline = rows.slice(0, 24).reduce((sum, row) => sum + row.consumption_kwh, 0);
+      const current = rows.slice(24).reduce((sum, row) => sum + row.consumption_kwh, 0);
+      if (baseline > 0) {
+        result.energySavedKwh = baseline - current;
+        result.energySavedPct = result.energySavedKwh / baseline * 100;
+        const avoided = Math.max(0, result.energySavedKwh);
+        if (Number.isFinite(assumptions.tariffRmPerKwh) && assumptions.tariffRmPerKwh >= 0) {
+          result.costAvoidedRm = avoided * assumptions.tariffRmPerKwh;
+        }
+        if (Number.isFinite(assumptions.emissionsKgPerKwh) && assumptions.emissionsKgPerKwh >= 0) {
+          result.carbonAvoidedKg = avoided * assumptions.emissionsKgPerKwh;
+        }
+      }
+    }
+    const model = forecast?.test_metrics?.model;
+    const baseline = forecast?.test_metrics?.baseline;
+    if (Number.isFinite(model?.mae_kwh) && model.mae_kwh >= 0
+      && Number.isFinite(baseline?.mae_kwh) && baseline.mae_kwh >= 0
+      && Number.isInteger(model.n) && model.n > 0 && model.n === baseline.n) {
+      result.maeImprovementKwh = baseline.mae_kwh - model.mae_kwh;
+      if (baseline.mae_kwh > 0) result.maeImprovementPct = result.maeImprovementKwh / baseline.mae_kwh * 100;
+    }
+    return result;
+  }
+
+  loadKpiAssumptions() {
+    try { return JSON.parse(localStorage.getItem('ENERGIOS_KPI_ASSUMPTIONS_V1') || '{}') || {}; }
+    catch (_) { return {}; }
+  }
+
+  calculateApprovedPlanSavings(plan, assetId, assumptions = {}) {
+    if (!plan?.appliedAt) return { available: false, reason: 'Approve a solar/battery plan for the selected building in the Township AI panel.' };
+    return { ...this.calculateScenarioSavings(plan.result, assetId, assumptions), appliedAt: plan.appliedAt };
+  }
+
+  getKpiScenarioProfile(assetId) {
+    const template = window.dispatchPlans?.active?.()?.result;
+    const inputs = { asset_id: assetId };
+    if (!template) return { inputs, source: 'Existing engine demo defaults; editable in the Township scenario inputs. No building equipment or location is measured.' };
+    const a = template.assumptions || {}, location = template.location || {};
+    for (const key of ['pv_capacity_kwp', 'pv_performance_ratio', 'temperature_coefficient_per_c',
+      'reference_temperature_c', 'battery_capacity_kwh', 'battery_reserve_pct', 'max_charge_kw',
+      'max_discharge_kw', 'charge_efficiency', 'discharge_efficiency', 'grid_available']) {
+      if (a[key] !== undefined) inputs[key] = a[key];
+    }
+    if (a.battery_initial_soc_pct !== undefined) inputs.battery_soc_pct = a.battery_initial_soc_pct;
+    for (const key of ['latitude', 'longitude']) if (location[key] !== undefined) inputs[key] = location[key];
+    if (location.name) inputs.location_name = location.name;
+    if (template.estimated_grid_cost) {
+      inputs.grid_price_per_kwh = template.estimated_grid_cost.price_per_kwh;
+      inputs.grid_price_currency = template.estimated_grid_cost.currency;
+    }
+    return { inputs, source: `Shared scenario assumptions from ${template.asset_name || 'the active approved plan'}, applied to this building's own forecast. This preview is not approved; equipment and demo weather location are assumptions.` };
+  }
+
+  async loadKpiScenario(assetId, force = false) {
+    if (!assetId || window.dispatchPlans?.forAsset(assetId)) { this.renderKpiContext(); return; }
+    const profile = this.getKpiScenarioProfile(assetId), signature = JSON.stringify(profile.inputs);
+    const cached = this.kpiScenarios.get(assetId);
+    if (!force && cached?.signature === signature && Date.now() - cached.at < 15 * 60 * 1000) return cached.promise;
+    const entry = { signature, source: profile.source, status: 'loading', at: Date.now() };
+    this.kpiScenarios.set(assetId, entry);
+    if (this.state.activeBuildingId === assetId) this.renderKpiContext();
+    entry.promise = (async () => {
+      try {
+        const result = await window.apiClient.getSolarGridRecommendation(profile.inputs);
+        if (result?.asset_id !== assetId) throw new Error('The scenario response belongs to a different building.');
+        entry.result = result;
+        entry.status = 'ready';
+      } catch (error) {
+        entry.status = 'error';
+        entry.error = error.message || 'The scenario service is unavailable.';
+      } finally {
+        if (this.state.activeBuildingId === assetId && this.kpiScenarios.get(assetId) === entry) this.renderKpiContext();
+      }
+    })();
+    return entry.promise;
+  }
+
+  calculateScenarioSavings(r, assetId, assumptions = {}) {
+    const unavailable = reason => ({ available: false, reason });
+    if (!r || r.asset_id !== assetId
+      || r.result_type !== 'simulated_solar_grid_recommendation') {
+      return unavailable('A calculated solar/battery scenario for the selected building is required.');
+    }
+    if (r.assumptions?.grid_available !== true) {
+      return unavailable('An all-grid comparison is unavailable while the scenario grid is unavailable.');
+    }
+    const hours = r.hours;
+    if (!Array.isArray(hours) || hours.length !== 24) return unavailable('A complete 24-hour dispatch forecast is required.');
+    const keys = ['demand_forecast_kwh', 'solar_to_load_kwh', 'battery_to_load_kwh', 'grid_to_load_kwh', 'unmet_demand_kwh'];
+    for (let i = 0; i < hours.length; i++) {
+      const h = hours[i];
+      if (!h || typeof h !== 'object') return unavailable('The plan contains an invalid interval.');
+      const time = Date.parse(h.demand_forecast_timestamp);
+      if (!Number.isFinite(time) || (i > 0 && time - Date.parse(hours[i - 1].demand_forecast_timestamp) !== 3600000)
+        || keys.some(key => !Number.isFinite(h[key]) || h[key] < 0)
+        || Math.abs(h.demand_forecast_kwh - h.solar_to_load_kwh - h.battery_to_load_kwh - h.grid_to_load_kwh - h.unmet_demand_kwh) > 0.01
+        || h.unmet_demand_kwh > 0) return unavailable('The plan has missing, invalid or unserved demand; no savings estimate is shown.');
+    }
+    const sum = key => hours.reduce((total, h) => total + h[key], 0);
+    const demand = sum('demand_forecast_kwh');
+    if (!Number.isFinite(demand) || demand <= 0) return unavailable('A finite positive forecast demand baseline is required.');
+    const solar = sum('solar_to_load_kwh'), battery = sum('battery_to_load_kwh');
+    const displaced = Math.min(demand, solar + battery);
+    let tariff = null, tariffSource = 'Not configured';
+    if (Number.isFinite(assumptions.tariffRmPerKwh) && assumptions.tariffRmPerKwh >= 0) {
+      tariff = assumptions.tariffRmPerKwh;
+      tariffSource = 'User-entered KPI flat tariff assumption (valuation override only)';
+    } else if (typeof r.estimated_grid_cost?.currency === 'string'
+      && ['RM', 'MYR'].includes(r.estimated_grid_cost.currency.trim().toUpperCase())
+      && Number.isFinite(r.estimated_grid_cost?.price_per_kwh) && r.estimated_grid_cost.price_per_kwh >= 0) {
+      tariff = r.estimated_grid_cost.price_per_kwh;
+      tariffSource = 'Price assumption captured in this scenario';
+    }
+    const carbon = Number.isFinite(assumptions.emissionsKgPerKwh) && assumptions.emissionsKgPerKwh >= 0
+      ? solar * assumptions.emissionsKgPerKwh : null;
+    return { available: true, demandKwh: demand, gridDisplacedKwh: displaced,
+      gridDisplacedPct: displaced / demand * 100, solarKwh: solar, batteryKwh: battery,
+      costAvoidedRm: tariff === null ? null : displaced * tariff,
+      carbonAvoidedKg: carbon, tariff, tariffSource,
+      forecastStart: hours[0].demand_forecast_timestamp,
+      forecastEnd: hours[23].demand_forecast_timestamp };
+  }
+
+  renderKpiContext() {
+    const assumptions = this.loadKpiAssumptions();
+    const values = this.calculateKpiContext(this.state.readings?.items || [], this.state.forecast, assumptions);
+    const plan = window.dispatchPlans?.forAsset(this.state.activeBuildingId);
+    const entry = this.kpiScenarios.get(this.state.activeBuildingId);
+    const preview = entry?.signature === JSON.stringify(this.getKpiScenarioProfile(this.state.activeBuildingId).inputs) ? entry : null;
+    const savings = plan ? this.calculateApprovedPlanSavings(plan, this.state.activeBuildingId, assumptions)
+      : this.calculateScenarioSavings(preview?.result, this.state.activeBuildingId, assumptions);
+    const loading = !plan && preview?.status === 'loading';
+    const fixed = (number, digits = 1) => number.toFixed(digits);
+    const energy = savings.available
+      ? `Estimated grid electricity saved: ${fixed(savings.gridDisplacedKwh)} kWh (${fixed(savings.gridDisplacedPct)}%) · 24h scenario estimate`
+      : 'Estimated grid electricity saved: Not available';
+    this.setText('metric-total-delta', energy);
+    let cost = !savings.available || savings.costAvoidedRm === null ? 'Estimated grid purchase cost saved: Not available'
+      : `Estimated grid purchase cost saved: RM ${fixed(savings.costAvoidedRm, 2)} · 24h scenario estimate`;
+    if (Number.isFinite(assumptions.emissionsKgPerKwh) && assumptions.emissionsKgPerKwh >= 0) {
+      cost += !savings.available || savings.carbonAvoidedKg === null ? ' · Estimated solar-only emissions saved: Not available'
+        : ` · Estimated solar-only emissions saved: ${fixed(savings.carbonAvoidedKg)} kg CO₂e`;
+    }
+    this.setText('metric-current-status', cost);
+    if (loading) {
+      this.setText('metric-total-delta', 'Calculating grid electricity saved for this building…');
+      this.setText('metric-current-status', 'Calculating scenario cost estimate…');
+    }
+    const improvement = values.maeImprovementKwh;
+    this.setText('metric-export-delta', improvement === null ? 'Forecast accuracy improvement: Not available'
+      : `Forecast accuracy ${improvement >= 0 ? 'improvement' : 'worsened'}: ${fixed(Math.abs(improvement), 2)} kWh (${values.maeImprovementPct === null ? 'percentage Not available' : `${fixed(Math.abs(values.maeImprovementPct))}%`}) vs baseline model`);
+    for (const [id, tone] of [['metric-total-delta', savings.available ? '#16a34a' : '#71767B'],
+      ['metric-current-status', savings.available && savings.costAvoidedRm !== null ? '#16a34a' : '#71767B'],
+      ['metric-export-delta', improvement === null ? '#71767B' : improvement < 0 ? '#e11d48' : '#16a34a']]) {
+      const el = document.getElementById(id);
+      if (el?.style) el.style.color = tone;
+    }
+    const retry = document.getElementById('kpi-scenario-retry');
+    if (retry) { retry.disabled = loading; retry.textContent = loading ? 'Calculating…' : 'Refresh selected building estimate'; }
+    const appliedInputs = document.getElementById('kpi-scenario-inputs');
+    const r = plan?.result || preview?.result;
+    if (appliedInputs) appliedInputs.textContent = r ? JSON.stringify({ location: r.location, weather: r.weather, assumptions: r.assumptions }, null, 2) : 'Inputs will appear after a successful scenario calculation.';
+    const evidence = document.getElementById('kpi-estimate-evidence');
+    if (evidence) {
+      evidence.textContent = loading ? 'Calculating this building’s own forecast scenario; no plan is being approved.'
+        : !savings.available ? `Savings estimate: Not available — ${preview?.error || savings.reason} Use Refresh to retry.`
+        : `${plan ? `Approved plan ${savings.appliedAt}.` : `Unapproved preview. ${preview.source}`} ML demand forecast baseline: ${fixed(savings.demandKwh)} kWh, ${savings.forecastStart} to ${savings.forecastEnd} (24 hourly intervals). Solar to load: ${fixed(savings.solarKwh)} kWh; battery to load: ${fixed(savings.batteryKwh)} kWh. Tariff: ${savings.tariff === null ? 'Not configured — enter a flat RM/kWh assumption below to calculate cost saved' : `RM ${savings.tariff}/kWh (${savings.tariffSource})`}. Historical BDG2 forecast and demo-location weather have independent timelines.`;
+    }
+    this.setText('kpi-observed-comparison', values.energySavedKwh === null ? 'Observed prior-day comparison: Not available.'
+      : `Observed prior-day change: ${fixed(-values.energySavedKwh)} kWh (${fixed(-values.energySavedPct)}%). This is a historical usage change, not intervention savings.`);
+  }
+
+  setupKpiAssumptions() {
+    document.getElementById('kpi-scenario-retry')?.addEventListener('click', () => this.loadKpiScenario(this.state.activeBuildingId, true));
+    const fields = [['kpi-tariff', 'tariffRmPerKwh'], ['kpi-emissions', 'emissionsKgPerKwh']];
+    const saved = this.loadKpiAssumptions();
+    for (const [id, key] of fields) {
+      const input = document.getElementById(id);
+      if (!input) continue;
+      input.value = Number.isFinite(saved[key]) && saved[key] >= 0 ? saved[key] : '';
+      input.addEventListener('input', () => {
+        const assumptions = {};
+        for (const [fieldId, fieldKey] of fields) {
+          const raw = document.getElementById(fieldId)?.value.trim() || '';
+          const value = Number(raw);
+          if (raw !== '' && Number.isFinite(value) && value >= 0) assumptions[fieldKey] = value;
+        }
+        try { localStorage.setItem('ENERGIOS_KPI_ASSUMPTIONS_V1', JSON.stringify(assumptions)); }
+        catch (_) { this.showToast('Could not save estimate assumptions in this browser.'); }
+        this.renderKpiContext();
+      });
+    }
+    window.addEventListener('storage', (event) => {
+      if (event.key === 'ENERGIOS_KPI_ASSUMPTIONS_V1' || event.key === null) this.renderKpiContext();
+    });
   }
 
   getCompleteHourlyWindow(readings, endIndex) {
@@ -532,7 +730,13 @@ class EnergiOSDashboard {
     if (!readings.length) return;
 
     // Window of 24 readings from Supabase
-    const windowReadings = readings.slice(-24);
+    const approved = window.dispatchPlans?.forAsset(this.state.activeBuildingId);
+    const windowReadings = approved ? approved.result.hours.map(hour => ({
+      timestamp: hour.weather_timestamp, consumption_kwh: hour.demand_forecast_kwh,
+    })) : readings.slice(-24);
+    this.setText('battery-operations-note', approved
+      ? `Scenario plan · weather-local hours in ${approved.result.weather.timezone}. ${windowReadings[0].timestamp} to ${windowReadings[windowReadings.length - 1].timestamp}. No measured battery data.`
+      : 'Illustrative battery demo · no approved plan for this asset; no measured battery data.');
     const floorArea = Number(this.state.currentBuilding?.floor_area_m2) || 10000;
     const peakSolarKw = Math.max(25, Math.round(floorArea * 0.008 * 10) / 10);
 
@@ -549,7 +753,7 @@ class EnergiOSDashboard {
       const d = new Date(r.timestamp);
       const hour = d.getUTCHours();
       const load = Number(r.consumption_kwh) || 30;
-      const timeStr = `${hour < 10 ? '0' + hour : hour}:00`;
+      const timeStr = approved ? r.timestamp.slice(11, 16) : `${hour < 10 ? '0' + hour : hour}:00`;
 
       // Solar generation curve (peaks midday)
       let solarGen = 0;
@@ -572,7 +776,11 @@ class EnergiOSDashboard {
       let flowText = 'Standby Buffer';
       let badgeHtml = '<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-400 border border-sky-200 dark:border-sky-800">Storing</span>';
 
-      if (solarGen >= 10 && solarGen >= batDischarge * 0.7) {
+      if (approved) {
+        solarGen = approved.result.hours[i].solar_to_battery_kwh;
+        batDischarge = approved.result.hours[i].battery_to_load_kwh;
+      }
+      if (approved ? solarGen > 0 : solarGen >= 10 && solarGen >= batDischarge * 0.7) {
         state = 'charging';
         stateColor = '#22C55E'; // Green
         rateText = `+${solarGen.toFixed(1)} kW`;
@@ -580,7 +788,7 @@ class EnergiOSDashboard {
         badgeHtml = '<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">Charging</span>';
         chargingHours++;
         chargingKwh += solarGen;
-      } else if (batDischarge >= 10 && (hour >= 15 || solarGen < 8)) {
+      } else if (approved ? batDischarge > 0 : batDischarge >= 10 && (hour >= 15 || solarGen < 8)) {
         state = 'discharging';
         stateColor = '#FF7A00'; // Orange
         rateText = `-${batDischarge.toFixed(1)} kW`;
@@ -602,6 +810,10 @@ class EnergiOSDashboard {
         soc = Math.round(46 + (hour >= 22 ? (24 - hour) * 0.4 : hour * 0.4));
       }
       soc = Math.max(18, Math.min(98, soc));
+      if (approved) {
+        const capacity = approved.result.assumptions.battery_capacity_kwh;
+        soc = capacity > 0 ? approved.result.hours[i].battery_soc_kwh / capacity * 100 : 0;
+      }
 
       labels.push(i % 3 === 0 ? timeStr : '');
       dataPoints.push(soc);
@@ -611,7 +823,7 @@ class EnergiOSDashboard {
       // Table row HTML
       tableRowsHtml += `
         <tr class="hover:bg-slate-50 dark:hover:bg-neutral-800/50 transition-colors">
-          <td class="py-2 px-3 font-bold text-[#1E2022] dark:text-white font-mono">${timeStr}</td>
+          <td class="py-2 px-3 font-bold text-[#1E2022] dark:text-white font-mono">${approved ? r.timestamp.replace('T', ' ') : timeStr}</td>
           <td class="py-2 px-3">
             <div class="flex items-center gap-2">
               <span class="font-bold text-[#1E2022] dark:text-white w-8 font-mono">${soc}%</span>
@@ -728,6 +940,22 @@ class EnergiOSDashboard {
    * Updates radial SVG progress circle, status pills, current power, duration, capacity.
    */
   updateBatteryStorageMetrics() {
+    const approved = window.dispatchPlans?.forAsset(this.state.activeBuildingId);
+    if (approved) {
+      const h = approved.result.hours[approved.transition.hour_index];
+      const a = approved.result.assumptions;
+      const soc = a.battery_capacity_kwh > 0 ? h.battery_soc_kwh / a.battery_capacity_kwh * 100 : 0;
+      this.setText('gauge-percent', `${soc.toFixed(1)}%`);
+      this.setText('gauge-status-rate', 'Approved scenario · no live control');
+      this.setText('battery-status-tag', h.solar_to_battery_kwh > 0 ? 'Scenario charging' : h.battery_to_load_kwh > 0 ? 'Scenario discharging' : 'Scenario standby');
+      this.setText('metric-current-power', `${(h.battery_to_load_kwh - h.solar_to_battery_kwh).toFixed(1)} kW avg (discharge +)`);
+      const available = Math.max(0, h.battery_soc_kwh - a.battery_capacity_kwh * a.battery_reserve_pct / 100) * a.discharge_efficiency;
+      this.setText('metric-duration', h.demand_forecast_kwh > 0 ? `${(available / h.demand_forecast_kwh).toFixed(1)} h at scenario demand; power limit applies` : 'Not available');
+      this.setText('metric-capacity', `${a.battery_capacity_kwh.toFixed(1)} kWh · assumption`);
+      const gauge = document.getElementById('battery-gauge-circle');
+      if (gauge) gauge.style.strokeDashoffset = 339.29 * (1 - soc / 100);
+      return;
+    }
     const readings = this.state.readings?.items || [];
     const floorArea = Number(this.state.currentBuilding?.floor_area_m2) || 12000;
     const capacityKwh = Math.round(floorArea * 0.04 * 10) / 10; // e.g. ~480.0 kWh
@@ -864,9 +1092,11 @@ class EnergiOSDashboard {
       'impact-eui-val',
     ];
     placeholders.forEach((id) => this.setText(id, '—'));
-    this.setText('metric-total-delta', 'Waiting for backend data');
-    this.setText('metric-current-status', 'Waiting for backend data');
-    this.setText('metric-export-delta', 'Waiting for backend evaluation');
+    this.setText('metric-total-delta', 'Estimated grid electricity saved: Not available');
+    this.setText('metric-current-status', 'Estimated grid purchase cost saved: Not available');
+    this.setText('metric-export-delta', 'Forecast accuracy improvement: Not available');
+    this.setText('kpi-estimate-evidence', 'Savings estimate: Not available — dashboard data is unavailable.');
+    this.setText('kpi-observed-comparison', 'Observed prior-day comparison: Not available.');
     this.setText('alerts-count-tag', 'Unavailable');
     this.setText('anomaly-rule-summary', 'Rule evidence unavailable · whole-building meter');
     this.setText('forecast-method-description', 'Method details unavailable.');
@@ -942,6 +1172,14 @@ class EnergiOSDashboard {
   }
 
   setupEventListeners() {
+    this.setupKpiAssumptions();
+    window.addEventListener('energios:dispatch-updated', () => {
+      if (!this.state.readings) return;
+      void this.loadKpiScenario(this.state.activeBuildingId);
+      this.renderKpiContext();
+      this.renderBatteryOperationsChart();
+      this.updateBatteryStorageMetrics();
+    });
     document.getElementById('alerts-card-trigger')?.addEventListener('click', () => this.openAlertDetails());
     document.getElementById('api-status-pill')?.addEventListener('click', () => this.loadData());
     window.addEventListener('energios:theme-changed', () => {
@@ -961,7 +1199,7 @@ class EnergiOSDashboard {
       if (newSettings?.defaultBuildingId && newSettings.defaultBuildingId !== this.state.activeBuildingId) {
         this.selectBuilding(newSettings.defaultBuildingId);
       } else if (this.state.readings && this.state.forecast) {
-        this.renderMetrics(this.state.readings, this.state.forecast);
+        this.updateProjectReadings();
       }
     });
   }
