@@ -9,3 +9,5 @@ htmlcov/
 *.log
 .env
 .env.local
+backend/local_data/enefit/
+backend/local_models/enefit/

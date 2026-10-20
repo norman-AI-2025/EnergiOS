@@ -19,7 +19,7 @@ function result() {
     asset_id: 'real-bdg2-id', asset_name: 'Hog_office_Bill',
     weather: { timezone: 'Asia/Kuala_Lumpur', retrieved_at_utc: '2026-10-19', uncertainty: 'Indicative' },
     location: { name: 'Separate demo location' }, demand_basis: 'Historical BDG2 forecast and demo weather are independent timelines.',
-    assumptions: { battery_capacity_kwh: 100, battery_reserve_pct: 20, pv_capacity_kwp: 50, dispatch_policy: 'Solar first; retain reserve.' },
+    assumptions: { battery_capacity_kwh: 100, battery_initial_soc_pct: 30, charge_efficiency: 1, battery_reserve_pct: 20, pv_capacity_kwp: 50, dispatch_policy: 'Solar first; retain reserve.' },
     estimated_grid_cost: null, source_mix_kwh: { solar_to_load_kwh: 120, battery_to_load_kwh: 20 },
     hours: [{ demand_forecast_kwh: 100, solar_to_load_kwh: 50, battery_to_load_kwh: 10,
       grid_to_load_kwh: 40, unmet_demand_kwh: 0, battery_soc_kwh: 30, solar_to_battery_kwh: 0,
@@ -49,6 +49,129 @@ function videoReceipt(r) {
     review_id:r.video_demo.review_id, profile_hash:r.video_demo.profile_hash,
     expires_at_utc:r.video_demo.expires_at_utc };
 }
+
+function savingsPlan(assetId, demand, specialHour) {
+  const r = videoResult();
+  r.asset_id = assetId;
+  r.assumptions.grid_available = true;
+  r.assumptions.battery_initial_soc_pct = 20;
+  r.assumptions.battery_capacity_kwh = 100;
+  r.estimated_grid_cost = {currency:'MYR',price_per_kwh:0.5};
+  r.hours = r.hours.map((h, i) => {
+    const baseline = i === specialHour ? demand * 2 : demand;
+    return {...h, demand_forecast_kwh:baseline, solar_to_load_kwh:baseline/2,
+      battery_to_load_kwh:0, grid_to_load_kwh:baseline/2,
+      battery_soc_kwh:20, unmet_demand_kwh:0};
+  });
+  return {result:r,appliedAt:'2026-10-19T00:00:00Z'};
+}
+
+test('township savings sum aligned intervals and derive percentages from totals', () => {
+  const {store}=load();
+  const plans=[savingsPlan('a',100,0),savingsPlan('b',75,1),
+    savingsPlan('c',30,2),savingsPlan('d',20,3)];
+  const report=store.periodSavings(plans,'Daily');
+  assert.equal(report.includedBuildings,4);
+  assert.equal(report.periods.length,1);
+  const day=report.periods[0];
+  assert.equal(day.intervals,24);
+  assert.equal(day.complete,true);
+  assert.equal(day.gridSavedKwh,day.baselineKwh/2);
+  assert.equal(day.gridSavedPct,50);
+  assert.equal(day.costSavedRm,day.baselineCostRm/2);
+  assert.equal(day.costSavedPct,50);
+  assert.equal(day.consumptionSavedKwh,0);
+  assert.equal(day.demandChargeSavingsRm,null);
+  assert.equal(day.baselinePeakKw,325); // simultaneous hour 0, not sum of individual peaks
+  assert.notEqual(day.baselinePeakKw,450);
+  const monthly=store.periodSavings(plans,'Monthly');
+  assert.equal(monthly.periods[0].complete,false);
+  assert.equal(monthly.periods[0].expectedIntervals,744);
+  assert.equal(monthly.periods[0].baselineKwh,day.baselineKwh);
+});
+
+test('partial building coverage, unavailable tariff, and local day boundaries stay explicit', () => {
+  const {store}=load();
+  const plan=savingsPlan('a',100,0);
+  plan.result.estimated_grid_cost=null;
+  const report=store.periodSavings([plan],'Daily',{timezoneByAsset:{a:'US/Central'}});
+  assert.equal(report.periods.length,2);
+  assert.deepEqual(Array.from(report.periods,x=>x.intervals),[6,18]);
+  assert.ok(report.periods.every(x=>!x.complete && x.costSavedRm===null));
+  const tariff=store.periodSavings([plan],'Hourly',{tariffRmPerKwh:0.6});
+  assert.equal(tariff.periods[0].costSavedRm,tariff.periods[0].gridSavedKwh*0.6);
+});
+
+test('daily and monthly completeness respect US/Central daylight saving transitions', () => {
+  const {store}=load(); const spring=savingsPlan('a',100,-1);
+  spring.result.hours.forEach((h,i)=>{
+    h.demand_forecast_timestamp=new Date(Date.UTC(2018,2,11,6+i)).toISOString();
+  });
+  const daily=store.periodSavings([spring],'Daily',{timezoneByAsset:{a:'US/Central'}});
+  assert.equal(daily.periods[0].period,'2018-03-11');
+  assert.equal(daily.periods[0].intervals,23);
+  assert.equal(daily.periods[0].expectedIntervals,23);
+  assert.equal(daily.periods[0].complete,true);
+  const monthly=store.periodSavings([spring],'Monthly',{timezoneByAsset:{a:'US/Central'}});
+  assert.equal(monthly.periods[0].expectedIntervals,743);
+  const fall=savingsPlan('a',100,-1);
+  fall.result.hours.forEach((h,i)=>{
+    h.demand_forecast_timestamp=new Date(Date.UTC(2018,10,4,5+i)).toISOString();
+  });
+  const hours=store.periodSavings([fall],'Hourly',{timezoneByAsset:{a:'US/Central'}});
+  const repeated=hours.periods.filter(row=>row.period.startsWith('2018-11-04 01:00'));
+  assert.equal(hours.periods.length,24);
+  assert.equal(repeated.length,2);
+  assert.notEqual(repeated[0].period,repeated[1].period);
+  const fallDay=store.periodSavings([fall],'Daily',{timezoneByAsset:{a:'US/Central'}});
+  assert.equal(fallDay.periods[0].expectedIntervals,25);
+  assert.equal(fallDay.periods[0].complete,false);
+});
+
+test('portfolio RM and kWh percentages use summed baselines with differing prices', () => {
+  const {store}=load();
+  const a=savingsPlan('a',100,0), b=savingsPlan('b',200,0);
+  b.result.estimated_grid_cost.price_per_kwh=0.8;
+  for (const h of b.result.hours) {
+    h.solar_to_load_kwh=h.demand_forecast_kwh/4;
+    h.grid_to_load_kwh=h.demand_forecast_kwh*3/4;
+  }
+  const day=store.periodSavings([a,b],'Daily').periods[0];
+  assert.equal(day.baselineKwh,7500);
+  assert.equal(day.gridSavedKwh,2500);
+  assert.ok(Math.abs(day.gridSavedPct-100/3)<1e-9);
+  assert.equal(day.baselineCostRm,5250);
+  assert.equal(day.costSavedRm,1625);
+  assert.ok(Math.abs(day.costSavedPct-1625/5250*100)<1e-9);
+  assert.equal(day.demandChargeSavingsRm,null);
+  assert.equal(store.periodSavings([a,a,b],'Daily').omittedBuildings,1);
+});
+
+test('dashboard shows four-building totals and updates selected KPI after plan changes', () => {
+  const {store,c,elements}=load();
+  vm.runInContext(fs.readFileSync(path.join(__dirname,'../src/js/velora_app.js'),'utf8'),c);
+  const app=c.window.veloraApp;
+  app.state.assets=['a','b','c','d'].map(id=>({id,timezone:'UTC'}));
+  app.state.activeBuildingId='a';
+  const state=store.read();
+  state.approved={a:savingsPlan('a',100,0),b:savingsPlan('b',75,1),
+    c:savingsPlan('c',30,2),d:savingsPlan('d',20,3)};
+  state.activeAssetId='a'; store.save(state);
+  for (const id of ['township-savings','metric-total-delta','metric-current-status'])
+    elements[id]={innerHTML:'',textContent:'',style:{}};
+  app.renderKpiContext();
+  assert.match(elements['metric-total-delta'].textContent,/1,250\.0 kWh \(50\.0%\)|1250\.0 kWh \(50\.0%\)/);
+  assert.match(elements['township-savings'].innerHTML,/4 approved plans, 0 unapproved previews/);
+  assert.match(elements['township-savings'].innerHTML,/Measured post-action savings: Not available/);
+  app.state.activeBuildingId='b'; app.state.activeTimeframe='Daily'; app.renderKpiContext();
+  assert.match(elements['metric-total-delta'].textContent,/2018-01-01/);
+  assert.match(elements['metric-total-delta'].textContent,/approved-plan projection/);
+  const before=elements['metric-current-status'].textContent;
+  const next=store.read(); next.approved.b.result.estimated_grid_cost.price_per_kwh=0.9; store.save(next);
+  app.renderKpiContext();
+  assert.notEqual(elements['metric-current-status'].textContent,before);
+  assert.match(elements['township-savings'].innerHTML,/Demand-charge savings remain unavailable/);
+});
 
 test('fixed demo approval requires fresh server review; dismissal never applies the plan', () => {
   const {store} = load(); const r = videoResult();

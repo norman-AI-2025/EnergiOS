@@ -147,10 +147,17 @@ def recommend_dispatch(
     *,
     asset_name: str,
     provenance: dict,
+    battery_discharge_limits_kw: list[float] | None = None,
 ) -> SolarGridRecommendation:
     """Apply solar-first dispatch and reserve/power-limited battery support."""
     if len(forecast_items) < 24 or len(weather.get("rows", [])) < 24:
         raise ValueError("24 demand-forecast and weather intervals are required")
+    if battery_discharge_limits_kw is not None and (
+        len(battery_discharge_limits_kw) != 24
+        or any(not math.isfinite(value) or value < 0 or value > request.max_discharge_kw
+               for value in battery_discharge_limits_kw)
+    ):
+        raise ValueError("24 finite battery discharge limits within the equipment rating are required")
 
     battery_soc = request.battery_capacity_kwh * request.battery_soc_pct / 100
     reserve_kwh = request.battery_capacity_kwh * request.battery_reserve_pct / 100
@@ -160,7 +167,7 @@ def recommend_dispatch(
               "unmet_demand_kwh": 0.0, "curtailed_solar_kwh": 0.0,
               "demand_forecast_kwh": 0.0, "solar_estimate_kwh": 0.0}
 
-    for demand, weather_row in zip(forecast_items[:24], weather["rows"][:24]):
+    for index, (demand, weather_row) in enumerate(zip(forecast_items[:24], weather["rows"][:24])):
         load = float(demand["forecast_kwh"])
         if not math.isfinite(load) or load < 0:
             raise ValueError("Demand forecast values must be finite and non-negative")
@@ -182,7 +189,9 @@ def recommend_dispatch(
         curtailed = max(0.0, solar_surplus - solar_to_battery)
 
         available_output = max(0.0, (battery_soc - reserve_kwh) * request.discharge_efficiency)
-        battery_to_load = min(residual, request.max_discharge_kw, available_output)
+        discharge_limit = (request.max_discharge_kw if battery_discharge_limits_kw is None
+                           else battery_discharge_limits_kw[index])
+        battery_to_load = min(residual, discharge_limit, available_output)
         battery_soc = max(reserve_kwh, battery_soc - battery_to_load / request.discharge_efficiency)
         residual -= battery_to_load
 
@@ -209,6 +218,8 @@ def recommend_dispatch(
             reasons.append("Use battery energy only above the configured reserve and within discharge limits.")
         if grid_to_load > 0:
             reasons.append("Use the grid for remaining demand because it is marked available.")
+        if battery_discharge_limits_kw is not None and residual > 0 and discharge_limit < request.max_discharge_kw:
+            reasons.append(f"The authored demonstration schedule limits battery delivery to {discharge_limit:.3f} kW in this hourly interval; stored energy is retained outside the support window.")
         if solar_to_load < load:
             reasons.append(f"Weather-estimated PV supplies {solar_to_load:.3f} kWh of {load:.3f} kWh demand at {irradiance:.1f} W/m² shortwave radiation.")
         if residual > 0 and battery_to_load == 0:

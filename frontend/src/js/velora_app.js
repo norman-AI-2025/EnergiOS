@@ -17,9 +17,14 @@ class EnergiOSDashboard {
     this.batteryActiveView = 'chart';
     this.kpiScenarios = new Map();
     this.selectionSequence = 0;
+    this.batteryDataMode = 'plan';
+    this.batteryDemos = new Map();
   }
 
   async init() {
+    this.batteryDataMode = localStorage.getItem('ENERGIOS_BATTERY_VIEW') === 'plan' ? 'plan' : 'demo';
+    const source=document.getElementById('battery-data-source');
+    if (source) source.value=this.batteryDataMode;
     this.setupEventListeners();
     await this.loadData();
   }
@@ -74,6 +79,9 @@ class EnergiOSDashboard {
         return;
       }
       await this.selectBuilding(initialAsset.id);
+      for (const asset of this.state.assets) {
+        if (asset.id !== initialAsset.id) void this.loadKpiScenario(asset.id);
+      }
     } catch (error) {
       console.warn('[EnergiOS Dashboard] Load error:', error);
       this.setApiStatus(false, 'Data unavailable');
@@ -128,6 +136,7 @@ class EnergiOSDashboard {
       this.state.readings = readings;
       this.state.forecast = forecast;
       this.state.anomalies = anomalies;
+      this.state.readingSummary = null;
       this.updateAssetLabels(asset);
       this.updateProjectReadings();
 
@@ -160,6 +169,8 @@ class EnergiOSDashboard {
           : 'Public Benchmark Snapshot';
       this.setApiStatus(true, statusLabel);
       void this.loadKpiScenario(asset.id);
+      if (this.batteryDataMode === 'demo') void this.loadBatteryDemo();
+      if (this.state.activeTimeframe !== 'Hourly') void this.setTimeframe(this.state.activeTimeframe);
     } catch (error) {
       if (selection !== this.selectionSequence) return;
       console.warn('[EnergiOS Dashboard] selectBuilding error:', error);
@@ -177,7 +188,7 @@ class EnergiOSDashboard {
   updateAssetLabels(asset) {
     const subtitle = document.getElementById('site-subtitle-tag');
     if (subtitle) {
-      subtitle.textContent = `PUBLIC BENCHMARK · BDG2 V1.0 · ${asset.name} · WHOLE-BUILDING METER · ${asset.timezone}`;
+      subtitle.textContent = `${asset.name.replaceAll('_', ' ')} · Public benchmark`;
     }
 
     const timezone = document.getElementById('asset-timezone-label');
@@ -223,36 +234,10 @@ class EnergiOSDashboard {
 
     this.setText('metric-current-val', this.formatNumber(latest.consumption_kwh, 1));
 
-    this.setText('metric-export-val', modelMetric ? this.formatNumber(modelMetric.mae_kwh, 2) : '22.07');
+    this.setText('metric-export-val', modelMetric ? this.formatNumber(modelMetric.mae_kwh, 2) : '—');
     this.renderKpiContext();
 
-    // Power Demand Dial
-    this.setText('dial-power-val', this.formatNumber(latest.consumption_kwh, 1));
-    this.setText('dial-min-val', `${this.formatNumber(min24, 1)} kWh`);
-    this.setText('dial-max-val', `${this.formatNumber(max24, 1)} kWh`);
-    this.setText('dial-avg-val', `${this.formatNumber(avg24, 1)} kWh`);
-
-    // Load & Efficiency Card
-    const loadFactor = max24 > 0 ? Math.round((latest.consumption_kwh / max24) * 100) : 68;
-    this.setText('battery-pct-val', `${loadFactor}%`);
-    this.setText('bar-energy-val', `${this.formatNumber(latest.consumption_kwh, 1)} / ${this.formatNumber(max24, 1)} kW`);
-    this.setWidth('progress-bar-energy', max24 > 0 ? (latest.consumption_kwh / max24) * 100 : 41);
-
-    // EUI & Deviation Bars
-    const eui = asset.floor_area_m2 ? (total24 / asset.floor_area_m2) : 0.33;
-    this.setText('bar-consuming-val', `${eui.toFixed(2)} kWh/m² · Day`);
-    this.setWidth('progress-bar-consuming', Math.min(100, Math.max(10, eui * 100)));
-
-    this.setText(
-      'bar-temp-val',
-      modelMetric
-        ? `MAE ±${this.formatNumber(modelMetric.mae_kwh, 2)} kWh`
-        : 'MAE ±22.07 kWh'
-    );
-    this.setWidth(
-      'progress-bar-temp',
-      maePctOfRecentMean === null ? 55 : Math.min(100, Math.max(10, maePctOfRecentMean))
-    );
+    // Demand, intensity and model evidence are refreshed for the selected period below.
 
     // Anomaly Alerts Tag
     this.setText('alerts-count-tag', `${anomalies.count || anomalies.items?.length || 0} Flags`);
@@ -300,10 +285,12 @@ class EnergiOSDashboard {
     this.setText('impact-cost-val', `${currency} ${this.formatNumber(estCost, 2)}`);
     const estCarbon = total24 * 0.65;
     this.setText('impact-carbon-val', `${this.formatNumber(estCarbon, 0)} kg CO₂e`);
-    this.setText('impact-eui-val', `${eui.toFixed(2)} kWh/m² · Day`);
+    this.setText('impact-eui-val', Number.isFinite(asset.floor_area_m2) && asset.floor_area_m2>0
+      ? `${(total24/asset.floor_area_m2).toFixed(2)} kWh/m² · Day` : 'Area not available');
 
     this.setText('forecast-coverage-label', `${forecasts.length || 24} forecast intervals returned`);
     this.renderPowerDialTicks(latest.consumption_kwh, max24);
+    this.updatePeriodCards();
   }
 
   calculateKpiContext(readings, forecast, assumptions = {}) {
@@ -388,10 +375,19 @@ class EnergiOSDashboard {
         entry.result = result;
         entry.status = 'ready';
       } catch (error) {
-        entry.status = 'error';
-        entry.error = error.message || 'The scenario service is unavailable.';
+        if (typeof window.apiClient.getVideoDispatch === 'function') {
+          try {
+            const fallback = await window.apiClient.getVideoDispatch(assetId,0);
+            if (fallback?.asset_id !== assetId) throw new Error('Demo profile belongs to a different building');
+            entry.result=fallback; entry.status='ready';
+            entry.source='Fixed demo battery/PV profile, calculated with this building’s BDG2 demand. Not approved.';
+          } catch (_) { entry.status='error'; entry.error='The forecast scenario is unavailable. Retry the calculation.'; }
+        } else { entry.status = 'error'; entry.error = error.message || 'The scenario service is unavailable.'; }
       } finally {
-        if (this.state.activeBuildingId === assetId && this.kpiScenarios.get(assetId) === entry) this.renderKpiContext();
+        this.renderTownshipSavings();
+        if (this.state.activeBuildingId === assetId && this.kpiScenarios.get(assetId) === entry) {
+          this.renderKpiContext(); this.renderBatteryOperationsChart(); this.updateBatteryStorageMetrics();
+        }
       }
     })();
     return entry.promise;
@@ -423,6 +419,17 @@ class EnergiOSDashboard {
     if (!Number.isFinite(demand) || demand <= 0) return unavailable('A finite positive forecast demand baseline is required.');
     const solar = sum('solar_to_load_kwh'), battery = sum('battery_to_load_kwh');
     const displaced = Math.min(demand, solar + battery);
+    // Restore the initial battery inventory before crediting grid-purchase savings.
+    // Unknown charging provenance receives no battery savings credit.
+    const a = r.assumptions || {};
+    const initial = a.battery_capacity_kwh * a.battery_initial_soc_pct / 100;
+    const final = hours[23].battery_soc_kwh;
+    const inventoryKnown = Number.isFinite(initial) && initial >= 0 && Number.isFinite(final) && final >= 0
+      && Number.isFinite(a.charge_efficiency) && a.charge_efficiency > 0 && a.charge_efficiency <= 1;
+    const replenishment = inventoryKnown ? Math.max(0, initial - final) / a.charge_efficiency : battery;
+    const grid = sum('grid_to_load_kwh');
+    const optimisedGrid = grid + replenishment;
+    const netSaved = demand - optimisedGrid;
     let tariff = null, tariffSource = 'Not configured';
     if (Number.isFinite(assumptions.tariffRmPerKwh) && assumptions.tariffRmPerKwh >= 0) {
       tariff = assumptions.tariffRmPerKwh;
@@ -437,10 +444,50 @@ class EnergiOSDashboard {
       ? solar * assumptions.emissionsKgPerKwh : null;
     return { available: true, demandKwh: demand, gridDisplacedKwh: displaced,
       gridDisplacedPct: displaced / demand * 100, solarKwh: solar, batteryKwh: battery,
-      costAvoidedRm: tariff === null ? null : displaced * tariff,
+      netGridSavedKwh: netSaved, netGridSavedPct: netSaved / demand * 100,
+      optimisedGridKwh: optimisedGrid, replenishmentKwh: replenishment, inventoryKnown,
+      baselineConsumptionKwh: demand, optimisedConsumptionKwh: demand, consumptionSavedKwh: 0,
+      baselineCostRm: tariff === null ? null : demand * tariff,
+      optimisedCostRm: tariff === null ? null : optimisedGrid * tariff,
+      costSavedPct: tariff === null || tariff === 0 ? null : netSaved / demand * 100,
+      maximumDemandSavings: null,
+      costAvoidedRm: tariff === null ? null : netSaved * tariff,
       carbonAvoidedKg: carbon, tariff, tariffSource,
       forecastStart: hours[0].demand_forecast_timestamp,
       forecastEnd: hours[23].demand_forecast_timestamp };
+  }
+
+  periodSavingsFor(results) {
+    const assumptions = this.loadKpiAssumptions();
+    const timezoneByAsset = Object.fromEntries(this.state.assets.map(asset => [asset.id, asset.timezone || 'UTC']));
+    const zones = [...new Set(results.map(plan => timezoneByAsset[plan.result.asset_id] || 'UTC'))];
+    const reportingTimezone = zones.length === 1 ? zones[0] : 'UTC';
+    return window.dispatchPlans?.periodSavings?.(results, this.state.activeTimeframe, {
+      tariffRmPerKwh: assumptions.tariffRmPerKwh, timezoneByAsset, reportingTimezone,
+    });
+  }
+
+  renderTownshipSavings() {
+    const host = document.getElementById('township-savings');
+    if (!host || !this.state.assets.length) return;
+    const results = this.state.assets.map(asset => {
+      const approved = window.dispatchPlans?.forAsset(asset.id);
+      if (approved) return approved;
+      const entry = this.kpiScenarios.get(asset.id);
+      const signature = JSON.stringify(this.getKpiScenarioProfile(asset.id).inputs);
+      return entry?.status === 'ready' && entry.signature === signature
+        ? {result:entry.result, status:'preview'} : null;
+    }).filter(Boolean);
+    const report = this.periodSavingsFor(results);
+    const count = report?.includedBuildings || 0;
+    const approvedCount = results.filter(plan => plan.appliedAt).length;
+    const previewCount = results.length - approvedCount;
+    const esc = value => String(value).replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+    const number = value => Number(value).toLocaleString(undefined,{maximumFractionDigits:1});
+    const rows = report?.periods || [];
+    host.innerHTML = `<div class="flex flex-wrap items-start justify-between gap-2"><div><h2 class="text-lg font-bold">Township savings overview</h2><p class="text-xs text-slate-500">Projected ${esc(this.state.activeTimeframe.toLowerCase())} comparison · ${count}/${this.state.assets.length} building forecasts · ${approvedCount} approved plans, ${previewCount} unapproved previews · ${esc(report?.reportingTimezone || 'UTC')} · no live equipment control</p></div><p class="text-xs text-slate-500">Measured post-action savings: Not available</p></div>
+      ${rows.length ? `<div class="overflow-x-auto max-h-96 overflow-y-auto mt-3"><table class="w-full text-xs text-left"><thead class="sticky top-0 bg-white dark:bg-[#171e2b]"><tr class="border-b"><th class="py-2">Period</th><th>Baseline grid</th><th>Optimised grid</th><th>Grid electricity saved</th><th>Purchase cost saved</th><th>Concurrent peak*</th><th>Coverage</th></tr></thead><tbody>${rows.map(row => `<tr class="border-b border-slate-100 dark:border-slate-800"><td class="py-2">${esc(row.period)}</td><td>${number(row.baselineKwh)} kWh</td><td>${number(row.optimisedGridKwh)} kWh</td><td>${number(row.gridSavedKwh)} kWh (${row.gridSavedPct === null ? 'N/A' : number(row.gridSavedPct)+'%'})</td><td>${row.costSavedRm === null ? 'Not available' : 'RM '+number(row.costSavedRm)+' ('+(row.costSavedPct === null ? 'percentage unavailable' : number(row.costSavedPct)+'%')+')'}</td><td>${number(row.baselinePeakKw)} → ${number(row.optimisedPeakKw)} kW</td><td>${row.complete && count === this.state.assets.length ? 'Complete' : 'Partial'}</td></tr>`).join('')}</tbody></table></div>` : '<p class="text-sm mt-3">Savings estimate: Not available while forecast scenarios load.</p>'}
+      <p class="text-xs text-slate-500 mt-2">These four BDG2 buildings are separate public benchmarks; their combined forecast is a portfolio scenario, not a measured physical township or utility account. Solar/grid switching changes purchases, not building consumption, so projected consumption reduction is 0 kWh. No monthly extrapolation is used; partial periods and missing buildings are not filled. *Peak is the maximum simultaneous one-hour average across included buildings, not a billed maximum. Demand-charge savings remain unavailable without a verified shared-account or per-meter structure, complete billing-period measurements at the tariff interval, and an applicable RM/kW rate.</p>`;
   }
 
   renderKpiContext() {
@@ -451,19 +498,42 @@ class EnergiOSDashboard {
     const preview = entry?.signature === JSON.stringify(this.getKpiScenarioProfile(this.state.activeBuildingId).inputs) ? entry : null;
     const savings = plan ? this.calculateApprovedPlanSavings(plan, this.state.activeBuildingId, assumptions)
       : this.calculateScenarioSavings(preview?.result, this.state.activeBuildingId, assumptions);
+    const periodReport = this.periodSavingsFor(plan ? [plan] : preview?.result ? [{result:preview.result, status:'preview'}] : []);
+    let periodRow = periodReport?.periods.at(-1);
+    if (this.state.activeTimeframe === 'Hourly' && periodReport?.periods.length === 24) {
+      const rows = periodReport.periods;
+      const baselineKwh = rows.reduce((sum, row) => sum + row.baselineKwh, 0);
+      const gridSavedKwh = rows.reduce((sum, row) => sum + row.gridSavedKwh, 0);
+      const priced = rows.every(row => row.costSavedRm !== null);
+      const baselineCostRm = rows.reduce((sum, row) => sum + row.baselineCostRm, 0);
+      const costSavedRm = priced ? rows.reduce((sum, row) => sum + row.costSavedRm, 0) : null;
+      periodRow = {period:'next 24h', complete:true, gridSavedKwh,
+        gridSavedPct:baselineKwh > 0 ? 100 * gridSavedKwh / baselineKwh : null,
+        costSavedRm, costSavedPct:priced && baselineCostRm > 0 ? 100 * costSavedRm / baselineCostRm : null,
+        solarToLoadKwh:rows.reduce((sum, row) => sum + row.solarToLoadKwh, 0)};
+    }
+    const periodNote = periodRow ? `${periodRow.period}${periodRow.complete ? '' : ' · partial period'} · ${plan ? 'approved-plan projection' : 'unapproved preview'} · no extrapolation` : '';
     const loading = !plan && preview?.status === 'loading';
     const fixed = (number, digits = 1) => number.toFixed(digits);
-    const energy = savings.available
-      ? `Estimated grid electricity saved: ${fixed(savings.gridDisplacedKwh)} kWh (${fixed(savings.gridDisplacedPct)}%) · 24h scenario estimate`
+    const energy = periodRow
+      ? `Estimated grid electricity saved: ${fixed(periodRow.gridSavedKwh)} kWh (${periodRow.gridSavedPct === null ? 'percentage Not available' : fixed(periodRow.gridSavedPct)+'%'}) · ${periodNote}`
+      : savings.available
+      ? `Estimated grid electricity saved: ${fixed(savings.netGridSavedKwh)} kWh (${fixed(savings.netGridSavedPct)}%) · 24h scenario estimate`
       : 'Estimated grid electricity saved: Not available';
     this.setText('metric-total-delta', energy);
-    let cost = !savings.available || savings.costAvoidedRm === null ? 'Estimated grid purchase cost saved: Not available'
-      : `Estimated grid purchase cost saved: RM ${fixed(savings.costAvoidedRm, 2)} · 24h scenario estimate`;
+    let cost = periodRow ? periodRow.costSavedRm === null ? 'Estimated grid purchase cost saved: Not available — configure an RM tariff'
+      : `Estimated grid purchase cost saved: RM ${fixed(periodRow.costSavedRm, 2)} (${periodRow.costSavedPct === null ? 'percentage Not available' : fixed(periodRow.costSavedPct)+'%'}) · ${periodNote}`
+      : !savings.available || savings.costAvoidedRm === null ? 'Estimated grid purchase cost saved: Not available'
+      : `Estimated grid purchase cost saved: RM ${fixed(savings.costAvoidedRm, 2)} (${savings.costSavedPct === null ? 'percentage Not available' : `${fixed(savings.costSavedPct)}%`}) · 24h scenario estimate`;
     if (Number.isFinite(assumptions.emissionsKgPerKwh) && assumptions.emissionsKgPerKwh >= 0) {
-      cost += !savings.available || savings.carbonAvoidedKg === null ? ' · Estimated solar-only emissions saved: Not available'
-        : ` · Estimated solar-only emissions saved: ${fixed(savings.carbonAvoidedKg)} kg CO₂e`;
+      const solarKwh = periodRow?.solarToLoadKwh ?? savings.solarKwh;
+      cost += !savings.available || !Number.isFinite(solarKwh) ? ' · Estimated solar-only emissions saved: Not available'
+        : ` · Estimated solar-only emissions saved: ${fixed(solarKwh * assumptions.emissionsKgPerKwh)} kg CO₂e`;
     }
     this.setText('metric-current-status', cost);
+    this.setText('kpi-period-comparison', !savings.available ? 'Matching-period savings comparison: Not available.'
+      : `${plan ? 'Approved demo plan' : 'Unapproved demo preview'} · Same 24 forecast hours: baseline grid ${fixed(savings.demandKwh)} kWh → optimised grid ${fixed(savings.optimisedGridKwh)} kWh, including ${fixed(savings.replenishmentKwh)} kWh battery replenishment allowance. Building consumption: ${fixed(savings.demandKwh)} → ${fixed(savings.demandKwh)} kWh; total energy saved 0.0 kWh (0.0%). Supply switching or shifting does not reduce consumption. ${savings.tariff === null ? 'Energy-cost comparison: Not available — configure RM/kWh.' : `Energy cost: RM ${fixed(savings.baselineCostRm, 2)} → RM ${fixed(savings.optimisedCostRm, 2)}.`} ${savings.inventoryKnown ? 'Battery inventory restored using the scenario charge efficiency.' : 'Battery charging origin/state incomplete: battery discharge receives no savings credit.'}`);
+    this.setText('kpi-demand-savings', 'Maximum-demand savings: Not available — requires complete billing-period demand measurements at the tariff billing interval and an applicable RM/kW demand rate. Hourly forecast peaks are not billing-grade demand.');
     if (loading) {
       this.setText('metric-total-delta', 'Calculating grid electricity saved for this building…');
       this.setText('metric-current-status', 'Calculating scenario cost estimate…');
@@ -471,8 +541,9 @@ class EnergiOSDashboard {
     const improvement = values.maeImprovementKwh;
     this.setText('metric-export-delta', improvement === null ? 'Forecast accuracy improvement: Not available'
       : `Forecast accuracy ${improvement >= 0 ? 'improvement' : 'worsened'}: ${fixed(Math.abs(improvement), 2)} kWh (${values.maeImprovementPct === null ? 'percentage Not available' : `${fixed(Math.abs(values.maeImprovementPct))}%`}) vs baseline model`);
-    for (const [id, tone] of [['metric-total-delta', savings.available ? '#16a34a' : '#71767B'],
-      ['metric-current-status', savings.available && savings.costAvoidedRm !== null ? '#16a34a' : '#71767B'],
+    for (const [id, tone] of [['metric-total-delta', periodRow || savings.available ? '#16a34a' : '#71767B'],
+      ['metric-current-status', periodRow ? periodRow.costSavedRm !== null ? '#16a34a' : '#71767B'
+        : savings.available && savings.costAvoidedRm !== null ? '#16a34a' : '#71767B'],
       ['metric-export-delta', improvement === null ? '#71767B' : improvement < 0 ? '#e11d48' : '#16a34a']]) {
       const el = document.getElementById(id);
       if (el?.style) el.style.color = tone;
@@ -490,6 +561,7 @@ class EnergiOSDashboard {
     }
     this.setText('kpi-observed-comparison', values.energySavedKwh === null ? 'Observed prior-day comparison: Not available.'
       : `Observed prior-day change: ${fixed(-values.energySavedKwh)} kWh (${fixed(-values.energySavedPct)}%). This is a historical usage change, not intervention savings.`);
+    this.renderTownshipSavings();
   }
 
   setupKpiAssumptions() {
@@ -554,6 +626,36 @@ class EnergiOSDashboard {
     container.innerHTML = svgContent;
   }
 
+  historyPresentation(summary, timeframe) {
+    const monthlyDetail = timeframe === 'Monthly' && summary.daily_detail;
+    const monthCoverage=monthlyDetail ? `${summary.items.reduce((n,b)=>n+b.observed_intervals,0)}/${summary.items.reduce((n,b)=>n+b.expected_intervals,0)} hours in month · daily detail` : null;
+    if (monthlyDetail) summary=summary.daily_detail;
+    const first = summary.items.findIndex(b => b.observed_intervals > 0);
+    const last = summary.items.reduce((index,b,i) => b.observed_intervals > 0 ? i : index,-1);
+    // Only trim unavailable edges. Missing periods inside the observed range stay gaps.
+    const items = first < 0 ? [] : summary.items.slice(first,last+1);
+    const monthly = timeframe === 'Monthly' && !monthlyDetail;
+    const forecast = summary.forecast?.items || [];
+    const periods = [...new Set([...items.map(b=>b.period), ...forecast.map(b=>b.period)])].sort();
+    const plotItems = periods.map(period => ({period, observed:items.find(b=>b.period===period), forecast:forecast.find(b=>b.period===period)}));
+    const labels = plotItems.map(b => new Intl.DateTimeFormat('en-GB', monthly
+      ? {month:'short',year:'numeric',timeZone:'UTC'}
+      : {day:'numeric',month:'short',timeZone:'UTC'}).format(new Date(b.period + (monthly ? '-01' : '') + 'T12:00:00Z')));
+    const count = items.reduce((n,b) => n+b.observed_intervals,0);
+    const expected = items.reduce((n,b) => n+b.expected_intervals,0);
+    const range = items.length ? `${items[0].first_observed_date || items[0].period} – ${items.at(-1).last_observed_date || items.at(-1).period}` : 'No recorded history';
+    const observedValues = plotItems.map(b=>b.observed?.observed_kwh ?? null);
+    const forecastValues = plotItems.map(b=>b.forecast?.forecast_kwh ?? null);
+    const firstForecast = forecastValues.findIndex(v=>v !== null);
+    let anchor = -1;
+    if (firstForecast > 0 && observedValues[firstForecast-1] !== null) {
+      anchor = firstForecast-1;
+      forecastValues[anchor] = observedValues[anchor];
+    }
+    return {items,labels,plotItems,observedValues,forecastValues,anchor,monthlyDetail:!!monthlyDetail,
+      coverage:`Observed · ${range} · ${monthCoverage || `${count}/${expected} hours${count < expected ? ' · partial' : ''}`} · ${summary.timezone}. ${forecast.length ? `Dashed: next 24 forecast hours${monthly ? ' (partial-month subtotal; different coverage)' : ''}.` : 'Next 24h forecast in Hourly view.'}`};
+  }
+
   renderEnergyOverviewChart() {
     const canvas = document.getElementById('energy-overview-chart');
     if (!canvas || !this.state.readings || !this.state.forecast || typeof Chart === 'undefined') return;
@@ -571,6 +673,26 @@ class EnergiOSDashboard {
     }
 
     const observed = this.state.readings.items;
+    if (this.state.activeTimeframe !== 'Hourly') {
+      const summary = this.state.readingSummary;
+      if (!summary) return;
+      const view = this.historyPresentation(summary,this.state.activeTimeframe);
+      const monthly = this.state.activeTimeframe === 'Monthly' && !view.monthlyDetail;
+      this.energyChart = new Chart(canvas, {type:'line', data:{
+        labels:view.labels, datasets:[{label:monthly ? 'Observed monthly subtotal (kWh)' : 'Observed daily energy (kWh)',
+          data:view.observedValues, backgroundColor:'transparent',
+          borderColor:'#FF7A00',borderWidth:2.2,spanGaps:false,
+          tension:0.2,pointRadius:3},
+          {label:'Forecast subtotal · next 24h (kWh)',data:view.forecastValues,backgroundColor:'transparent',
+            borderColor:'#22C55E',borderWidth:2.2,borderDash:[5,5],spanGaps:false,tension:0.2,pointRadius:3}]}, options:{
+        responsive:true, maintainAspectRatio:false, plugins:{legend:{display:true,position:'bottom'},
+          tooltip:{callbacks:{label:item => `${item.datasetIndex === 1 && item.dataIndex === view.anchor ? 'Observed anchor' : item.dataset.label}: ${Number(item.raw).toLocaleString(undefined,{maximumFractionDigits:2})} kWh`,
+            afterLabel: item => {const entry=view.plotItems[item.dataIndex];
+              const b=item.datasetIndex === 1 && item.dataIndex !== view.anchor ? entry.forecast : entry.observed;
+              return b ? `${b.observed_intervals ?? b.forecast_intervals}/${b.expected_intervals} hours · ${b.status} · ${summary.timezone}` : '';}}}},
+        scales:{x:{grid:{display:false},ticks:{maxRotation:0}},y:{beginAtZero:true,title:{display:true,text:'Energy (kWh)'}}}}});
+      return;
+    }
     const forecast = this.state.forecast.items;
     const ordered = [...observed, ...forecast].sort(
       (left, right) => Date.parse(left.timestamp) - Date.parse(right.timestamp)
@@ -676,15 +798,41 @@ class EnergiOSDashboard {
     containerB.innerHTML = renderCells(forecasts.slice(12, 24));
   }
 
-  setTimeframe(timeframe) {
-    if (timeframe !== 'Hourly') {
-      this.showToast('Only hourly readings are available from the current backend contract.');
-      return;
-    }
+  async setTimeframe(timeframe) {
+    if (!['Hourly','Daily','Monthly'].includes(timeframe)) return;
+    const assetId = this.state.activeBuildingId, sequence = (this.summarySequence || 0) + 1;
+    this.summarySequence = sequence;
     this.state.activeTimeframe = timeframe;
+    this.renderKpiContext();
+    this.setText('chart-series-label', timeframe === 'Hourly' ? 'Observed (kWh) · 24h Forecast' : `Observed ${timeframe.toLowerCase()} totals (kWh)`);
+    document.querySelectorAll('.timeframe-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.timeframe === timeframe);
+      b.setAttribute('aria-pressed', String(b.dataset.timeframe === timeframe));
+    });
+    if (timeframe !== 'Hourly') {
+      this.state.readingSummary = null;
+      if (this.energyChart) { this.energyChart.destroy(); this.energyChart = null; }
+      this.setText('history-coverage','Loading observed history…');
+      try {
+        const result = await window.apiClient.getReadingSummary(assetId,timeframe.toLowerCase());
+        if (sequence !== this.summarySequence || assetId !== this.state.activeBuildingId) return;
+        if (result.asset_id !== assetId || !Array.isArray(result.items)) throw new Error('History response could not be verified');
+        this.state.readingSummary = result;
+        this.setText('history-coverage',this.historyPresentation(result,timeframe).coverage);
+        this.setText('chart-series-label',timeframe === 'Monthly' ? 'Monthly view · daily detail · 24h forecast' : 'Observed · 24h forecast subtotal');
+      } catch (error) {
+        if (sequence === this.summarySequence && assetId === this.state.activeBuildingId) {
+          this.setText('history-coverage',`History unavailable. Select ${timeframe} again to retry.`);
+          this.updatePeriodCards(); this.renderBatteryOperationsChart(); this.updateBatteryStorageMetrics();
+        }
+        return;
+      }
+    } else this.setText('history-coverage','Observed hourly BDG2 readings and calculated 24-hour forecast.');
     this.renderEnergyOverviewChart();
+    this.updatePeriodCards();
     this.renderBatteryOperationsChart();
     this.updateBatteryStorageMetrics();
+    if (this.batteryDataMode === 'demo') void this.loadBatteryDemo();
   }
 
   /**
@@ -715,355 +863,194 @@ class EnergiOSDashboard {
     }
   }
 
-  /**
-   * Integrated Battery Operations: Level & Charge / Discharge Table & Chart
-   * Grounded in 24 hours of telemetry from Supabase.
-   * Color-coded states:
-   *   - Charging: #22C55E (Emerald Green)
-   *   - Storing: #0284C7 (Sky Blue)
-   *   - Discharging: #FF7A00 (Sunset Orange)
-   */
-  renderBatteryOperationsChart() {
-    const ctx = document.getElementById('battery-level-chart');
-    const tableBody = document.getElementById('battery-operations-table-body');
-    const readings = this.state.readings?.items || [];
-    if (!readings.length) return;
-
-    // Window of 24 readings from Supabase
-    const approved = window.dispatchPlans?.forAsset(this.state.activeBuildingId);
-    const windowReadings = approved ? approved.result.hours.map(hour => ({
-      timestamp: hour.weather_timestamp, consumption_kwh: hour.demand_forecast_kwh,
-    })) : readings.slice(-24);
-    this.setText('battery-operations-note', approved
-      ? `Scenario plan · weather-local hours in ${approved.result.weather.timezone}. ${windowReadings[0].timestamp} to ${windowReadings[windowReadings.length - 1].timestamp}. No measured battery data.`
-      : 'Illustrative battery demo · no approved plan for this asset; no measured battery data.');
-    const floorArea = Number(this.state.currentBuilding?.floor_area_m2) || 10000;
-    const peakSolarKw = Math.max(25, Math.round(floorArea * 0.008 * 10) / 10);
-
-    const labels = [];
-    const dataPoints = [];
-    const bgColors = [];
-    const metadata = [];
-    let tableRowsHtml = '';
-
-    let chargingHours = 0, storingHours = 0, dischargingHours = 0;
-    let chargingKwh = 0, dischargingKwh = 0;
-
-    windowReadings.forEach((r, i) => {
-      const d = new Date(r.timestamp);
-      const hour = d.getUTCHours();
-      const load = Number(r.consumption_kwh) || 30;
-      const timeStr = approved ? r.timestamp.slice(11, 16) : `${hour < 10 ? '0' + hour : hour}:00`;
-
-      // Solar generation curve (peaks midday)
-      let solarGen = 0;
-      if (hour >= 7 && hour <= 19) {
-        solarGen = peakSolarKw * Math.pow(Math.sin((Math.PI * (hour - 7)) / 12), 2);
-      }
-
-      // Battery discharge curve to building
-      let batDischarge = 0;
-      if (hour >= 8 && hour <= 21) {
-        batDischarge = Math.min(load * 0.45, 50, load);
-      } else {
-        batDischarge = Math.min(load * 0.20, 20, load);
-      }
-
-      // 3 Strict States: Charging, Storing, Discharging
-      let state = 'storing';
-      let stateColor = '#0284C7'; // Blue
-      let rateText = '0.0 kW';
-      let flowText = 'Standby Buffer';
-      let badgeHtml = '<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-400 border border-sky-200 dark:border-sky-800">Storing</span>';
-
-      if (approved) {
-        solarGen = approved.result.hours[i].solar_to_battery_kwh;
-        batDischarge = approved.result.hours[i].battery_to_load_kwh;
-      }
-      if (approved ? solarGen > 0 : solarGen >= 10 && solarGen >= batDischarge * 0.7) {
-        state = 'charging';
-        stateColor = '#22C55E'; // Green
-        rateText = `+${solarGen.toFixed(1)} kW`;
-        flowText = 'Solar → Battery';
-        badgeHtml = '<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">Charging</span>';
-        chargingHours++;
-        chargingKwh += solarGen;
-      } else if (approved ? batDischarge > 0 : batDischarge >= 10 && (hour >= 15 || solarGen < 8)) {
-        state = 'discharging';
-        stateColor = '#FF7A00'; // Orange
-        rateText = `-${batDischarge.toFixed(1)} kW`;
-        flowText = 'Battery → Building';
-        badgeHtml = '<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-orange-50 dark:bg-orange-950/60 text-orange-700 dark:text-orange-400 border border-orange-200 dark:border-orange-800">Discharging</span>';
-        dischargingHours++;
-        dischargingKwh += batDischarge;
-      } else {
-        storingHours++;
-      }
-
-      // State of Charge (SOC %) progression
-      let soc = 48;
-      if (hour >= 7 && hour <= 14) {
-        soc = Math.round(48 + 46 * Math.sin((Math.PI * (hour - 7)) / 14));
-      } else if (hour >= 15 && hour <= 21) {
-        soc = Math.round(94 - 48 * ((hour - 14) / 7));
-      } else {
-        soc = Math.round(46 + (hour >= 22 ? (24 - hour) * 0.4 : hour * 0.4));
-      }
-      soc = Math.max(18, Math.min(98, soc));
-      if (approved) {
-        const capacity = approved.result.assumptions.battery_capacity_kwh;
-        soc = capacity > 0 ? approved.result.hours[i].battery_soc_kwh / capacity * 100 : 0;
-      }
-
-      labels.push(i % 3 === 0 ? timeStr : '');
-      dataPoints.push(soc);
-      bgColors.push(stateColor);
-      metadata.push({ timeStr, soc, state, stateColor, rateText, flowText });
-
-      // Table row HTML
-      tableRowsHtml += `
-        <tr class="hover:bg-slate-50 dark:hover:bg-neutral-800/50 transition-colors">
-          <td class="py-2 px-3 font-bold text-[#1E2022] dark:text-white font-mono">${approved ? r.timestamp.replace('T', ' ') : timeStr}</td>
-          <td class="py-2 px-3">
-            <div class="flex items-center gap-2">
-              <span class="font-bold text-[#1E2022] dark:text-white w-8 font-mono">${soc}%</span>
-              <div class="w-16 h-1.5 bg-slate-100 dark:bg-neutral-800 rounded-full overflow-hidden">
-                <div class="h-full rounded-full transition-all" style="width: ${soc}%; background-color: ${stateColor};"></div>
-              </div>
-            </div>
-          </td>
-          <td class="py-2 px-3">${badgeHtml}</td>
-          <td class="py-2 px-3 text-right font-mono font-bold" style="color: ${stateColor};">${rateText}</td>
-          <td class="py-2 px-3 text-right text-[11px] text-[#71767B] dark:text-slate-400 font-sans">${flowText}</td>
-        </tr>
-      `;
-    });
-
-    // Populate Table View
-    if (tableBody) {
-      tableBody.innerHTML = tableRowsHtml;
+  periodEvidence() {
+    const timezone = this.state.currentBuilding?.timezone || 'UTC';
+    const localDate = stamp => new Intl.DateTimeFormat('sv-SE', {timeZone:timezone,year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(stamp));
+    const seen = new Set();
+    let rows = [...(this.state.readings?.items || [])].filter(r => {
+      const time=Date.parse(r.timestamp);
+      if (!Number.isFinite(time) || seen.has(time) || !Number.isFinite(r.consumption_kwh) || r.consumption_kwh < 0 || r.interval_minutes !== 60
+        || r.label !== 'observed' || r.quality_status !== 'observed') return false;
+      seen.add(time); return true;
+    }).sort((a,b)=>Date.parse(a.timestamp)-Date.parse(b.timestamp));
+    if (!rows.length) return null;
+    const last=rows.at(-1), date=localDate(last.timestamp), mode=this.state.activeTimeframe;
+    const key=mode === 'Monthly' ? date.slice(0,7) : date;
+    if (mode === 'Hourly') rows=rows.filter(r=>Date.parse(r.timestamp)>Date.parse(last.timestamp)-86400000);
+    else rows=rows.filter(r=>mode === 'Monthly' ? localDate(r.timestamp).slice(0,7)===key : localDate(r.timestamp)===key);
+    const calendar=this.state.readingSummary?.items?.find(b=>b.period===key);
+    const expected=mode === 'Monthly' ? calendar?.expected_intervals : mode === 'Daily' ? calendar?.expected_intervals || 24 : 24;
+    if (mode !== 'Hourly' && calendar?.observed_intervals > 0 && [calendar.observed_kwh,calendar.min_hourly_kw,calendar.max_hourly_kw,calendar.latest_hourly_kw].every(Number.isFinite)) {
+      const mean=calendar.observed_kwh/calendar.observed_intervals;
+      return {rows,total:calendar.observed_kwh,peak:calendar.max_hourly_kw,min:calendar.min_hourly_kw,mean,
+        latest:calendar.latest_hourly_kw,factor:calendar.max_hourly_kw>0 ? mean/calendar.max_hourly_kw*100 : null,
+        period:key,expected,coverage:`${calendar.observed_intervals}/${expected} observed hours`,mode};
     }
-
-    // Update Bottom Summary KPI Badges
-    const kpiCharging = document.getElementById('bat-kpi-charging');
-    const kpiStoring = document.getElementById('bat-kpi-storing');
-    const kpiDischarging = document.getElementById('bat-kpi-discharging');
-
-    if (kpiCharging) kpiCharging.textContent = `${chargingHours} hrs · +${chargingKwh.toFixed(0)} kWh`;
-    if (kpiStoring) kpiStoring.textContent = `${storingHours} hrs · Standby`;
-    if (kpiDischarging) kpiDischarging.textContent = `${dischargingHours} hrs · -${dischargingKwh.toFixed(0)} kWh`;
-
-    // Render Chart View
-    if (!ctx) return;
-    if (this.batteryOperationsChart) {
-      try { this.batteryOperationsChart.destroy(); } catch (_) {}
-      this.batteryOperationsChart = null;
-    }
-
-    const colors = window.getChartThemeColors ? window.getChartThemeColors() : { isDark: false };
-    const textColor = colors.isDark ? '#94A3B8' : '#71767B';
-    const gridColor = colors.isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.04)';
-
-    this.batteryOperationsChart = new Chart(ctx, {
-      type: 'bar',
-      data: {
-        labels: labels,
-        datasets: [{
-          data: dataPoints,
-          backgroundColor: bgColors,
-          borderRadius: 3,
-          barPercentage: 0.65,
-          categoryPercentage: 0.85,
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            backgroundColor: colors.isDark ? 'rgba(15, 23, 42, 0.95)' : 'rgba(30, 32, 34, 0.95)',
-            titleColor: '#FFFFFF',
-            bodyColor: '#F3F4F6',
-            padding: 10,
-            cornerRadius: 8,
-            titleFont: { size: 11, family: 'Inter', weight: 'bold' },
-            bodyFont: { size: 10, family: "'Space Grotesk', monospace" },
-            callbacks: {
-              title: (c) => `Hour ${metadata[c[0].dataIndex]?.timeStr || c[0].label}`,
-              label: (c) => {
-                const item = metadata[c.dataIndex];
-                if (!item) return ` Level: ${c.raw}% SOC`;
-                return [
-                  ` Level: ${item.soc}% Capacity (SOC)`,
-                  ` Status: ${item.state.toUpperCase()}`,
-                  ` Flow Rate: ${item.rateText}`,
-                  ` Pathway: ${item.flowText}`,
-                ];
-              }
-            }
-          }
-        },
-        scales: {
-          x: {
-            grid: { display: false, drawBorder: false },
-            ticks: {
-              color: textColor,
-              font: { size: 10, family: "'Space Grotesk', monospace" },
-              maxRotation: 0,
-            },
-            border: { display: false },
-          },
-          y: {
-            min: 0,
-            max: 100,
-            ticks: {
-              stepSize: 25,
-              color: textColor,
-              font: { size: 10, family: "'Space Grotesk', monospace" },
-              callback: (v) => `${v}%`,
-            },
-            grid: {
-              color: gridColor,
-              borderDash: [3, 3],
-              drawBorder: false,
-            },
-            border: { display: false },
-          }
-        }
-      }
-    });
+    const total=rows.reduce((n,r)=>n+r.consumption_kwh,0), peak=Math.max(...rows.map(r=>r.consumption_kwh));
+    return {rows,total,peak,min:Math.min(...rows.map(r=>r.consumption_kwh)),mean:total/rows.length,
+      latest:last.consumption_kwh, factor:peak>0 ? total/rows.length/peak*100 : null,
+      period:mode === 'Hourly' ? 'Latest 24 hours' : key, expected,
+      coverage:`${rows.length}/${expected ?? '?'} observed hours`, mode};
   }
 
-  /**
-   * Battery Storage Gauge & Telemetry Counters
-   * Updates radial SVG progress circle, status pills, current power, duration, capacity.
-   */
-  updateBatteryStorageMetrics() {
-    const approved = window.dispatchPlans?.forAsset(this.state.activeBuildingId);
-    if (approved) {
-      const h = approved.result.hours[approved.transition.hour_index];
-      const a = approved.result.assumptions;
-      const soc = a.battery_capacity_kwh > 0 ? h.battery_soc_kwh / a.battery_capacity_kwh * 100 : 0;
-      this.setText('gauge-percent', `${soc.toFixed(1)}%`);
-      this.setText('gauge-status-rate', 'Approved scenario · no live control');
-      this.setText('battery-status-tag', h.solar_to_battery_kwh > 0 ? 'Scenario charging' : h.battery_to_load_kwh > 0 ? 'Scenario discharging' : 'Scenario standby');
-      this.setText('metric-current-power', `${(h.battery_to_load_kwh - h.solar_to_battery_kwh).toFixed(1)} kW avg (discharge +)`);
-      const available = Math.max(0, h.battery_soc_kwh - a.battery_capacity_kwh * a.battery_reserve_pct / 100) * a.discharge_efficiency;
-      this.setText('metric-duration', h.demand_forecast_kwh > 0 ? `${(available / h.demand_forecast_kwh).toFixed(1)} h at scenario demand; power limit applies` : 'Not available');
-      this.setText('metric-capacity', `${a.battery_capacity_kwh.toFixed(1)} kWh · assumption`);
-      const gauge = document.getElementById('battery-gauge-circle');
-      if (gauge) gauge.style.strokeDashoffset = 339.29 * (1 - soc / 100);
+  updatePeriodCards() {
+    const m=this.periodEvidence();
+    if (!m) {
+      for (const id of ['dial-power-val','dial-min-val','dial-max-val','dial-avg-val','bar-energy-val','bar-consuming-val','battery-pct-val']) this.setText(id,'Not available');
       return;
     }
-    const readings = this.state.readings?.items || [];
-    const floorArea = Number(this.state.currentBuilding?.floor_area_m2) || 12000;
-    const capacityKwh = Math.round(floorArea * 0.04 * 10) / 10; // e.g. ~480.0 kWh
+    const n=v=>this.formatNumber(v,1);
+    this.setText('demand-period-note',`${m.period} · ${m.coverage}`);
+    this.setText('dial-period-label',m.mode === 'Hourly' ? 'Latest hourly avg' : `${m.mode} average`);
+    this.setText('dial-power-val',n(m.mode === 'Hourly' ? m.latest : m.mean));
+    this.setText('dial-min-val',`${n(m.min)} kW`);
+    this.setText('dial-max-val',`${n(m.peak)} kW`);
+    this.setText('dial-avg-val',`${n(m.mean)} kW`);
+    this.setText('battery-pct-val',m.factor === null ? '—' : `${n(m.factor)}%`);
+    this.setText('bar-energy-val',`${n(m.mean)} / ${n(m.peak)} kW`);
+    this.setWidth('progress-bar-energy',m.factor ?? 0);
+    const area=this.state.currentBuilding?.floor_area_m2;
+    const eui=Number.isFinite(area) && area>0 ? m.total/area : null;
+    this.setText('bar-consuming-val',eui === null ? 'Area not available' : `${eui.toFixed(2)} kWh/m² · shown period`);
+    this.setWidth('progress-bar-consuming',eui === null ? 0 : Math.min(100,eui*100));
+    const mae=this.state.forecast?.test_metrics?.model?.mae_kwh;
+    this.setText('bar-temp-val',Number.isFinite(mae) ? `Hourly MAE ${this.formatNumber(mae,2)} kWh` : 'Not available');
+    this.setWidth('progress-bar-temp',Number.isFinite(mae) && m.mean>0 ? Math.min(100,mae/m.mean*100) : 0);
+    const forecasts=this.state.forecast?.items || [];
+    this.setText('load-period-note',`Observed · ${m.period} · load factor = mean / peak hourly demand`);
+    this.setText('period-forecast-note',forecasts.length === 24 ? `ML forecast: next 24h ${n(forecasts.reduce((sum,r)=>sum+r.forecast_kwh,0))} kWh. Model MAE keeps its hourly evaluation basis.` : '24h forecast unavailable.');
+    this.renderPowerDialTicks(m.mode === 'Hourly' ? m.latest : m.mean,m.peak);
+  }
 
-    // Current hour from latest reading or UTC
-    let currentHour = new Date().getUTCHours();
-    if (readings.length > 0) {
-      const lastReading = readings[readings.length - 1];
-      const d = new Date(lastReading.timestamp);
-      if (!isNaN(d.getTime())) currentHour = d.getUTCHours();
-    }
+  setBatteryDataMode(mode) {
+    if (!['demo','plan'].includes(mode)) return;
+    this.batteryDataMode=mode;
+    localStorage.setItem('ENERGIOS_BATTERY_VIEW',mode);
+    this.renderBatteryOperationsChart();this.updateBatteryStorageMetrics();
+    if (mode === 'demo') void this.loadBatteryDemo();
+  }
 
-    // Solar power
-    const peakSolarKw = Math.max(25, Math.round(floorArea * 0.008 * 10) / 10);
-    let currentSolar = 0;
-    if (currentHour >= 7 && currentHour <= 19) {
-      currentSolar = peakSolarKw * Math.pow(Math.sin((Math.PI * (currentHour - 7)) / 12), 2);
-    }
-
-    // Current load & discharge
-    const latestLoad = readings.length > 0 ? Number(readings[readings.length - 1].consumption_kwh) : 45;
-    let currentDischarge = 0;
-    if (currentHour >= 8 && currentHour <= 21) {
-      currentDischarge = Math.min(latestLoad * 0.45, 50, latestLoad);
-    } else {
-      currentDischarge = Math.min(latestLoad * 0.20, 20, latestLoad);
-    }
-
-    // Current State of Charge (SOC)
-    let currentSoc = 68;
-    if (currentHour >= 7 && currentHour <= 14) {
-      currentSoc = Math.round(48 + 46 * Math.sin((Math.PI * (currentHour - 7)) / 14));
-    } else if (currentHour >= 15 && currentHour <= 21) {
-      currentSoc = Math.round(94 - 48 * ((currentHour - 14) / 7));
-    } else {
-      currentSoc = Math.round(46 + (currentHour >= 22 ? (24 - currentHour) * 0.4 : currentHour * 0.4));
-    }
-    currentSoc = Math.max(18, Math.min(98, currentSoc));
-
-    // Determine active state and color
-    let state = 'storing';
-    let stateColor = '#0284C7';
-    let statusTagText = '🔋 Storing';
-    let statusRateText = 'Standby · 0.0 kW';
-    let powerDisplay = `${currentDischarge.toFixed(1)} kW`;
-
-    if (currentSolar >= 10 && currentSolar >= currentDischarge * 0.7) {
-      state = 'charging';
-      stateColor = '#22C55E';
-      statusTagText = '⚡ Charging';
-      statusRateText = `+${currentSolar.toFixed(1)} kW / hour`;
-      powerDisplay = `${currentSolar.toFixed(1)} kW`;
-    } else if (currentDischarge >= 10 && (currentHour >= 15 || currentSolar < 8)) {
-      state = 'discharging';
-      stateColor = '#FF7A00';
-      statusTagText = '⚡ Discharging';
-      statusRateText = `-${currentDischarge.toFixed(1)} kW / hour`;
-      powerDisplay = `${currentDischarge.toFixed(1)} kW`;
-    }
-
-    // Average building load for duration calculation
-    const avgLoad = readings.length > 0
-      ? (readings.slice(-12).reduce((sum, r) => sum + Number(r.consumption_kwh || 0), 0) / 12)
-      : 36;
-    const availableKwh = (currentSoc / 100) * capacityKwh;
-    const backupDurationHours = Math.max(1.2, Math.round((availableKwh / Math.max(avgLoad, 5)) * 10) / 10);
-
-    // 1. Update Radial SVG Gauge
-    const gaugeCircle = document.getElementById('battery-gauge-circle');
-    if (gaugeCircle) {
-      const circumference = 339.29; // 2 * PI * 54
-      const offset = circumference * (1 - currentSoc / 100);
-      gaugeCircle.style.strokeDashoffset = offset;
-      gaugeCircle.setAttribute('stroke', stateColor);
-    }
-
-    // 2. Update Gauge Center Text & Rate
-    const gaugePercent = document.getElementById('gauge-percent');
-    if (gaugePercent) {
-      gaugePercent.innerHTML = `${currentSoc}<span class="text-sm font-semibold text-[#71767B] dark:text-slate-400">%</span>`;
-    }
-    const gaugeRate = document.getElementById('gauge-status-rate');
-    if (gaugeRate) {
-      gaugeRate.textContent = statusRateText;
-      gaugeRate.style.color = stateColor;
-    }
-
-    // 3. Update Status Tag Pill
-    const statusTag = document.getElementById('battery-status-tag');
-    if (statusTag) {
-      statusTag.textContent = statusTagText;
-      statusTag.style.color = stateColor;
-      if (state === 'charging') {
-        statusTag.className = 'text-xs font-semibold px-2.5 py-0.5 rounded-full border border-emerald-200/50 dark:border-emerald-800/60 bg-emerald-50 dark:bg-emerald-950/60 font-mono';
-      } else if (state === 'discharging') {
-        statusTag.className = 'text-xs font-semibold px-2.5 py-0.5 rounded-full border border-orange-200/50 dark:border-orange-800/60 bg-orange-50 dark:bg-orange-950/60 font-mono';
-      } else {
-        statusTag.className = 'text-xs font-semibold px-2.5 py-0.5 rounded-full border border-sky-200/50 dark:border-sky-800/60 bg-sky-50 dark:bg-sky-950/60 font-mono';
+  async loadBatteryDemo(force=false) {
+    const asset=this.state.activeBuildingId, period=this.state.activeTimeframe.toLowerCase();
+    if (!asset || this.batteryDataMode !== 'demo') return;
+    const key=`${asset}:${period}`, cached=this.batteryDemos.get(key);
+    if (!force && cached) return cached.promise;
+    const entry={status:'loading'};this.batteryDemos.set(key,entry);
+    entry.promise=(async()=>{
+      try {
+        const result=await window.apiClient.getBatteryDemo(asset,period);
+        if (result.asset_id!==asset || result.period!==period || !Array.isArray(result.items)) throw new Error('Demo data could not be verified');
+        entry.result=result;entry.status='ready';
+      } catch(error) {entry.status='error';entry.error='Battery demo unavailable. Use Retry.';}
+      if (this.state.activeBuildingId===asset && this.state.activeTimeframe.toLowerCase()===period && this.batteryDataMode==='demo') {
+        this.renderBatteryOperationsChart();this.updateBatteryStorageMetrics();
       }
+    })();
+    return entry.promise;
+  }
+
+  dashboardDispatch() {
+    const approved=window.dispatchPlans?.forAsset(this.state.activeBuildingId);
+    if (approved) return {...approved,kind:'Approved scenario'};
+    const entry=this.kpiScenarios.get(this.state.activeBuildingId);
+    if (entry?.status === 'ready' && entry.result?.asset_id === this.state.activeBuildingId) return {result:entry.result,kind:'Demo projection'};
+    return null;
+  }
+
+  batteryPeriodView(plan=this.dashboardDispatch()) {
+    if (arguments.length===0 && this.batteryDataMode==='demo') {
+      const demo=this.batteryDemos.get(`${this.state.activeBuildingId}:${this.state.activeTimeframe.toLowerCase()}`)?.result;
+      if (!demo) return null;
+      const items=demo.items.map(b=>({...b,label:this.state.activeTimeframe==='Hourly' ? b.key.slice(11,16) : b.key,
+        color:b.state==='cycling' ? '#8B5CF6' : b.state==='charging' ? '#22C55E' : b.state==='discharging' ? '#FF7A00' : '#0284C7'}));
+      return {synthetic:true,plan:{kind:'Demo battery cycle',result:{hours:[demo.storage_hour],weather:{timezone:demo.timezone},assumptions:demo.assumptions}},
+        items,capacity:demo.assumptions.battery_capacity_kwh,...demo.totals,hourCount:demo.scope_hours,
+        storageHour:demo.storage_hour,demandKwh:demo.totals.demand_kwh,metadata:demo};
     }
+    if (!plan?.result?.hours?.length) return null;
+    const r=plan.result, capacity=r.assumptions.battery_capacity_kwh;
+    if (!Number.isFinite(capacity) || capacity<0 || typeof r.weather?.timezone!=='string') return null;
+    const groups=new Map(), mode=this.state.activeTimeframe;
+    let charging=0,discharging=0,storing=0;
+    for (const h of r.hours) {
+      if (typeof h.weather_timestamp!=='string') return null;
+      if (![h.solar_to_battery_kwh,h.battery_to_load_kwh,h.battery_soc_kwh].every(v=>Number.isFinite(v)&&v>=0) || h.battery_soc_kwh>capacity) return null;
+      const key=mode === 'Monthly' ? h.weather_timestamp.slice(0,7) : mode === 'Daily' ? h.weather_timestamp.slice(0,10) : h.weather_timestamp;
+      const b=groups.get(key)||{key,count:0,charge:0,discharge:0};
+      b.count++; b.charge+=h.solar_to_battery_kwh; b.discharge+=h.battery_to_load_kwh;
+      b.soc=capacity>0 ? h.battery_soc_kwh/capacity*100 : 0; b.hour=h;
+      groups.set(key,b);
+      if (h.solar_to_battery_kwh>0) charging++; else if (h.battery_to_load_kwh>0) discharging++; else storing++;
+    }
+    const items=[...groups.values()].map(b=>({...b,label:mode === 'Hourly' ? b.key.slice(11,16) : b.key,
+      state:b.charge>0 && b.discharge>0 ? 'cycling' : b.charge>0 ? 'charging' : b.discharge>0 ? 'discharging' : 'storing',
+      color:b.charge>0 && b.discharge>0 ? '#8B5CF6' : b.charge>0 ? '#22C55E' : b.discharge>0 ? '#FF7A00' : '#0284C7'}));
+    return {plan,items,capacity,charging,discharging,storing,
+      charge:items.reduce((n,b)=>n+b.charge,0),discharge:items.reduce((n,b)=>n+b.discharge,0)};
+  }
 
-    // 4. Update Battery Storage Card 3 Key Metrics
-    this.setText('metric-current-power', powerDisplay);
-    this.setText('metric-duration', `~${backupDurationHours.toFixed(1)} hrs`);
-    this.setText('metric-capacity', `${capacityKwh.toFixed(1)} kWh`);
+  renderBatteryOperationsChart() {
+    const ctx=document.getElementById('battery-level-chart'), table=document.getElementById('battery-operations-table-body');
+    const view=this.batteryPeriodView();
+    const retry=document.getElementById('battery-demo-retry');
+    if (retry) retry.hidden=this.batteryDataMode!=='demo';
+    if (this.batteryOperationsChart) {this.batteryOperationsChart.destroy();this.batteryOperationsChart=null;}
+    if (!view) {
+      const pending=this.batteryDemos.get(`${this.state.activeBuildingId}:${this.state.activeTimeframe.toLowerCase()}`);
+      this.setText('battery-operations-note',pending?.status==='error' ? pending.error : 'Preparing battery demo from this building’s demand forecast…');
+      if (table) table.innerHTML='';
+      for (const id of ['bat-kpi-charging','bat-kpi-storing','bat-kpi-discharging']) this.setText(id,'—');
+      return;
+    }
+    const r=view.plan.result, mode=this.state.activeTimeframe;
+    const count=view.hourCount ?? r.hours.length, grouped=mode!=='Hourly';
+    this.setText('battery-operations-note',view.synthetic
+      ? `Demo battery assumptions · ${view.metadata.scope} · ${count} hours · ${r.weather.timezone}`
+      : `${view.plan.kind} · ${mode} · ${count}h forecast only · ${r.weather.timezone} · ${mode === 'Hourly' ? 'Hourly SOC' : 'Period-end SOC'} · demo battery inputs`);
+    this.setText('battery-demo-sources',view.synthetic ? JSON.stringify({version:view.metadata.version,sources:view.metadata.sources,
+      assumptions:view.metadata.assumptions,formulas:view.metadata.formulas,limitations:view.metadata.limitations},null,2)
+      : 'This view uses the existing approved plan or forecast preview. A reserve-only plan correctly stays in standby.');
+    this.setText('bat-kpi-charging',`${view.charging} hrs · +${view.charge.toFixed(1)} kWh`);
+    this.setText('bat-kpi-storing',`${view.storing} hrs · Standby`);
+    this.setText('bat-kpi-discharging',`${view.discharging} hrs · -${view.discharge.toFixed(1)} kWh`);
+    if (table) table.innerHTML=view.items.map(b=>`<tr><td class="p-3">${b.key.replace('T',' ')}</td><td class="p-3">${b.soc.toFixed(1)}%${grouped && Number.isFinite(b.min_soc) ? ` end · ${b.min_soc.toFixed(1)}–${b.max_soc.toFixed(1)}% range` : ''}</td><td class="p-3 capitalize">${b.state}</td><td class="p-3">${((b.discharge-b.charge)/b.count).toFixed(1)} kW avg</td><td class="p-3">+${b.charge.toFixed(1)} / -${b.discharge.toFixed(1)} kWh · ${b.count}h scenario</td></tr>`).join('');
+    if (!ctx || typeof Chart === 'undefined') return;
+    const datasets=grouped ? [
+      {label:'Charge (kWh)',data:view.items.map(b=>b.charge),backgroundColor:'#22C55E',maxBarThickness:22},
+      {label:'Discharge (kWh)',data:view.items.map(b=>b.discharge),backgroundColor:'#FF7A00',maxBarThickness:22},
+      {type:'line',label:'End SOC (%)',data:view.items.map(b=>b.soc),borderColor:'#0284C7',backgroundColor:'transparent',yAxisID:'soc',pointRadius:2}
+    ] : [{label:'Scenario SOC (%)',data:view.items.map(b=>b.soc),backgroundColor:view.items.map(b=>b.color),maxBarThickness:42,borderRadius:3}];
+    this.batteryOperationsChart=new Chart(ctx,{type:'bar',data:{labels:view.items.map(b=>b.label),datasets},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:grouped,position:'bottom'},tooltip:{callbacks:{afterLabel:item=>{const b=view.items[item.dataIndex];return [`${b.state} · ${b.count} scenario hours`,`Charge ${b.charge.toFixed(1)} / discharge ${b.discharge.toFixed(1)} kWh`];}}}},scales:{y:grouped ? {beginAtZero:true,title:{display:true,text:'Energy (kWh)'}} : {min:0,max:100,ticks:{callback:v=>`${v}%`}},...(grouped ? {soc:{position:'right',min:0,max:100,grid:{drawOnChartArea:false},ticks:{callback:v=>`${v}%`}}} : {}),x:{grid:{display:false},ticks:{maxTicksLimit:8,maxRotation:0}}}}});
+  }
 
-    // 5. Update Top Metric Battery % if present
-    this.setText('battery-pct-val', `${currentSoc}%`);
+  updateBatteryStorageMetrics() {
+    const view=this.batteryPeriodView();
+    if (!view) {
+      for (const id of ['gauge-percent','metric-current-power','metric-duration','metric-capacity']) this.setText(id,'—');
+      this.setText('gauge-status-rate','Waiting for forecast scenario');
+      this.setText('battery-status-tag','Demo battery');
+      const gauge=document.getElementById('battery-gauge-circle');
+      if (gauge) gauge.style.strokeDashoffset=339.29;
+      return;
+    }
+    const {plan,capacity}=view, r=plan.result, a=r.assumptions;
+    const hourly=this.state.activeTimeframe==='Hourly';
+    const h=view.storageHour || (hourly ? r.hours[plan.transition?.hour_index ?? 0] : r.hours.at(-1));
+    const soc=capacity>0 ? h.battery_soc_kwh/capacity*100 : 0;
+    const count=view.hourCount ?? r.hours.length;
+    const net=hourly ? h.battery_to_load_kwh-h.solar_to_battery_kwh : (view.discharge-view.charge)/count;
+    const available=Number.isFinite(a.discharge_efficiency) && Number.isFinite(a.battery_reserve_pct)
+      ? Math.max(0,h.battery_soc_kwh-capacity*a.battery_reserve_pct/100)*a.discharge_efficiency : null;
+    const load=hourly ? h.demand_forecast_kwh : (view.demandKwh ?? r.hours.reduce((n,row)=>n+row.demand_forecast_kwh,0))/count;
+    this.setText('gauge-percent',`${soc.toFixed(1)}%`);
+    this.setText('gauge-status-rate',`${plan.kind} · ${hourly ? 'selected hour' : 'period end'}`);
+    this.setText('battery-status-tag',!hourly && view.charge>0 && view.discharge>0 ? 'Scenario cycling' : Math.abs(net)<0.0001 ? 'Scenario standby' : net>0 ? 'Scenario discharging' : 'Scenario charging');
+    this.setText('metric-current-power',`${net.toFixed(1)} kW avg (discharge +)`);
+    this.setText('metric-duration',available === null ? 'Reserve/efficiency not configured' : available<=0 ? '0.0 h · reserve held' : !Number.isFinite(a.max_discharge_kw) ? 'Power limit not configured' : a.max_discharge_kw<load ? 'Power limit below building demand' : load>0 ? `${(available/load).toFixed(1)} h at forecast load` : 'No forecast load');
+    this.setText('metric-capacity',`${capacity.toFixed(1)} kWh · assumption`);
+    this.setText('battery-storage-note',`${view.synthetic ? 'Demo battery assumptions' : this.state.activeTimeframe} · ${count}h · reserve ${a.battery_reserve_pct}%`);
+    const gauge=document.getElementById('battery-gauge-circle');
+    if (gauge) gauge.style.strokeDashoffset=339.29*(1-soc/100);
   }
 
   openAlertDetails() {
@@ -1090,6 +1077,7 @@ class EnergiOSDashboard {
       'impact-cost-val',
       'impact-carbon-val',
       'impact-eui-val',
+      'gauge-percent','metric-current-power','metric-duration','metric-capacity',
     ];
     placeholders.forEach((id) => this.setText(id, '—'));
     this.setText('metric-total-delta', 'Estimated grid electricity saved: Not available');
@@ -1113,7 +1101,7 @@ class EnergiOSDashboard {
   setUnavailable(message) {
     this.clearMetrics();
     const subtitle = document.getElementById('site-subtitle-tag');
-    if (subtitle) subtitle.textContent = `PUBLIC BENCHMARK · DATA UNAVAILABLE · ${message}`;
+    if (subtitle) subtitle.textContent = `Public benchmark · Data unavailable · ${message}`;
     this.showToast(`Backend data unavailable: ${message}`);
   }
 
@@ -1172,10 +1160,12 @@ class EnergiOSDashboard {
   }
 
   setupEventListeners() {
+    document.getElementById('battery-data-source')?.addEventListener('change',event=>this.setBatteryDataMode(event.target.value));
+    document.getElementById('battery-demo-retry')?.addEventListener('click',()=>this.loadBatteryDemo(true));
     this.setupKpiAssumptions();
     window.addEventListener('energios:dispatch-updated', () => {
       if (!this.state.readings) return;
-      void this.loadKpiScenario(this.state.activeBuildingId);
+      for (const asset of this.state.assets) void this.loadKpiScenario(asset.id);
       this.renderKpiContext();
       this.renderBatteryOperationsChart();
       this.updateBatteryStorageMetrics();

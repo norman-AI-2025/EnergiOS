@@ -81,6 +81,14 @@ class EnergiOSApiClient {
     return this.baseUrl;
   }
 
+  getReadingSummary(assetId, period) {
+    return this.request(`/assets/${encodeURIComponent(assetId)}/readings/summary?period=${period}&include_forecast=true`, {originFallback:false, throwHttpErrors:true});
+  }
+
+  getBatteryDemo(assetId,period) {
+    return this.request(`/demo/battery-cycle/${encodeURIComponent(assetId)}?period=${period}`, {timeoutMs:20000,originFallback:false,throwHttpErrors:true});
+  }
+
   async request(path, options = {}) {
     const {
       timeoutMs = 8000,
@@ -145,6 +153,7 @@ class EnergiOSApiClient {
   }
 
   getSnapshotFallback(path, options = {}) {
+    if (path.includes('/readings/summary')) return null;
     const snapshot = typeof window !== 'undefined' ? window.ENERGIOS_BDG2_DATA : null;
     if (!snapshot) return null;
 

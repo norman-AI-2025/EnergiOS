@@ -12,6 +12,11 @@ from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.bdg2_analytics import parse_utc
+from src.reading_summary import summarize, summarize_forecast
+from src.battery_cycle_demo import battery_demo
+from starlette.concurrency import run_in_threadpool
+from datetime import timezone
+from zoneinfo import ZoneInfo
 from src.bdg2_data import (
     AssetNotFound,
     Bdg2DataService,
@@ -140,6 +145,60 @@ ServiceDependency = Annotated[Bdg2DataService, Depends(get_service)]
 async def health() -> HealthResponse:
     """Report application health and liveness status."""
     return HealthResponse(status="ok", version="1")
+
+
+@app.get('/assets/{asset_id}/readings/summary', tags=['BDG2 Analytics & Benchmarking'])
+async def reading_summary(asset_id: UUID, service: ServiceDependency,
+    period: Annotated[str, Query(pattern='^(daily|monthly)$')] = 'daily',
+    include_forecast: bool = False,
+    start: Annotated[datetime | None, Query(alias='from')] = None,
+    end: Annotated[datetime | None, Query(alias='to')] = None):
+    start, end = checked_range(start, end, 32)
+    try:
+        assets = await service.list_assets_async(limit=100)
+        asset = next((a for a in assets.items if str(a.id) == str(asset_id)), None)
+        if asset is None:
+            raise AssetNotFound('Asset is not in the approved cohort')
+        if start is None:
+            latest = await service.get_readings_async(asset_id, limit=1)
+            if not latest.items:
+                raise DataUnavailable('No observed history is available')
+            local = parse_utc(latest.items[-1].timestamp).astimezone(ZoneInfo(asset.timezone))
+            beginning = local.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            following = (beginning.replace(day=28) + timedelta(days=4)).replace(day=1)
+            start, end = beginning.astimezone(timezone.utc), following.astimezone(timezone.utc)
+        if start.minute or start.second or start.microsecond or end.minute or end.second or end.microsecond:
+            raise HTTPException(422, 'Range boundaries must align with hourly intervals')
+        readings = await service.get_readings_async(asset_id, start=start, end=end, limit=1000)
+        result = {'asset_id': str(asset_id), 'period': period, 'unit': 'kWh', 'label': 'observed',
+            'timezone': asset.timezone, 'from': start.isoformat(), 'to': end.isoformat(),
+            'provenance': readings.provenance, 'items': summarize(readings.items, start, end, asset.timezone, period)}
+        if include_forecast:
+            forecast = service.get_forecast(asset_id)
+            result['forecast'] = {'horizon_hours':24, 'method':forecast.method,
+                'items':summarize_forecast(forecast.items,asset.timezone,period),
+                'note':'Only the existing next 24 forecast hours are aggregated; no daily or monthly horizon extension.'}
+            if period == 'monthly':
+                result['daily_detail'] = {'period':'daily','timezone':asset.timezone,
+                    'items':summarize(readings.items,start,end,asset.timezone,'daily'),
+                    'forecast':{'horizon_hours':24,'items':summarize_forecast(forecast.items,asset.timezone,'daily')}}
+        return result
+    except HTTPException:
+        raise
+    except Exception as error:
+        raise map_error(error) from error
+
+
+@app.get('/demo/battery-cycle/{asset_id}', tags=['Demonstration scenarios'])
+async def demo_battery_cycle(asset_id: UUID, service: ServiceDependency,
+    period: Annotated[str, Query(pattern='^(hourly|daily|monthly)$')] = 'hourly'):
+    try:
+        catalogue = await service.list_assets_async(limit=100)
+        asset = next((a for a in catalogue.items if str(a.id) == str(asset_id)),None)
+        if asset is None: raise AssetNotFound('Asset is not in the approved cohort')
+        return await run_in_threadpool(battery_demo,asset.id,asset.name,service.get_forecast(asset_id).items,period)
+    except Exception as error:
+        raise map_error(error) from error
 
 
 @app.get("/database/status", tags=["System Operations"])

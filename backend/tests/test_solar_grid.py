@@ -83,6 +83,28 @@ def test_battery_never_crosses_configured_reserve():
     assert all(hour.grid_to_load_kwh > 0 for hour in result.hours)
 
 
+def test_demo_schedule_retains_battery_until_support_window_without_changing_default_policy():
+    forecast, weather = _hourly(demand=5)
+    request = _inputs()
+    limits = [0]*17 + [2]*5 + [0]*2
+    result = recommend_dispatch(request, forecast, weather, asset_name='demo', provenance={},
+                                battery_discharge_limits_kw=limits)
+    assert all(h.battery_to_load_kwh == 0 for h in result.hours[:17])
+    assert result.hours[16].battery_soc_kwh == 20
+    assert result.hours[17].battery_to_load_kwh == 2
+    assert any('schedule limits' in reason for reason in result.hours[0].reasons)
+    assert result.energy_balance['difference_kwh'] == 0
+    assert _run(request, demand=5).hours[0].battery_to_load_kwh == 5
+
+
+@pytest.mark.parametrize('limits', [[0]*23, [-1]*24, [11]*24, [float('nan')]*24, [float('inf')]*24])
+def test_demo_schedule_rejects_invalid_limits(limits):
+    forecast, weather = _hourly()
+    with pytest.raises(ValueError, match='24 finite battery discharge limits'):
+        recommend_dispatch(_inputs(), forecast, weather, asset_name='demo', provenance={},
+                           battery_discharge_limits_kw=limits)
+
+
 def test_grid_outage_reports_unmet_demand_and_balances_energy():
     result = _run(
         _inputs(battery_soc_pct=25, battery_reserve_pct=25, grid_available=False),

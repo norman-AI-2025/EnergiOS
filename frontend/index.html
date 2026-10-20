@@ -51,7 +51,7 @@
 
   <!-- Verified Backend & BDG2 Telemetry Sync -->
   <script src="src/data/bdg2_data.js"></script>
-  <script src="src/js/api.js?v=dispatch-3"></script>
+  <script src="src/js/api.js?v=dispatch-6"></script>
 </head>
 
 <body class="bg-[#FAF8F5] text-[#1E2022] antialiased min-h-screen flex flex-col p-6 lg:p-8 selection:bg-orange-100 selection:text-orange-900">
@@ -60,7 +60,7 @@
   <!-- APPLE DYNAMIC ISLAND (1:1 Exact Replica of dynamic_island.jpeg)     -->
   <!-- =================================================================== -->
   <div id="dynamic-island" class="fixed top-3.5 left-1/2 -translate-x-1/2 z-50 transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] select-none">
-    
+
     <!-- Collapsed Pill (Apple Dynamic Island State) -->
     <div id="island-collapsed" onclick="dynamicIsland.expand()" class="h-9 px-4 rounded-full bg-black text-white flex items-center justify-between gap-3.5 shadow-xl shadow-black/40 border border-white/10 cursor-pointer hover:scale-[1.03] transition-all" title="Click to open EnergiOS AI Copilot & Logs">
       <div class="flex items-center gap-2">
@@ -81,7 +81,7 @@
 
     <!-- Expanded Dynamic Island (1:1 Exact Match to dynamic_island.jpeg) -->
     <div id="island-expanded" class="hidden w-[760px] max-w-[94vw] bg-[#000000] text-white rounded-[36px] shadow-2xl shadow-black/90 border border-white/10 p-6 pt-3 relative overflow-hidden backdrop-blur-2xl">
-      
+
       <!-- Top Center: iPhone Physical Camera Cutout Notch -->
       <div class="w-28 h-5 rounded-full bg-[#121316] mx-auto mb-3 flex items-center justify-center gap-2.5 border border-white/5">
         <div class="w-2.5 h-2.5 rounded-full bg-[#070709] border border-blue-900/50 flex items-center justify-center">
@@ -195,7 +195,7 @@
   <!-- =================================================================== -->
   <!-- TOP NAVIGATION BAR (Clean with Logo & Profile, Dynamic Island above)-->
   <!-- =================================================================== -->
-  <header class="w-full flex items-center justify-between pb-6 max-w-[1540px] mx-auto relative z-10">
+  <header class="w-full flex flex-wrap sm:flex-nowrap gap-3 items-center justify-between pb-6 max-w-[1540px] mx-auto relative z-10">
     <!-- Brand Logo: Exact Orange Asterisk Sunburst + EnergiOS -->
     <a href="index.html" class="flex items-center gap-2.5 group">
       <div class="w-7 h-7 flex items-center justify-center text-[#FF7A00]">
@@ -222,7 +222,7 @@
     <div class="hidden sm:block w-32"></div>
 
     <!-- Right Utility Icons & Profile Avatar -->
-    <div class="flex items-center gap-4 text-[#71767B]">
+    <div class="flex flex-wrap items-center gap-2 sm:gap-4 text-[#71767B]">
       <!-- Live API Status Tag -->
       <div id="api-status-pill" class="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200/80 dark:border-emerald-800/60 text-emerald-800 dark:text-emerald-300 text-[11px] font-semibold cursor-pointer" title="Click to refresh telemetry from backend">
         <span id="api-status-dot" class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
@@ -271,7 +271,7 @@
         <span class="material-symbols-outlined text-[19px]">settings</span>
       </a>
       <!-- 4. Document Sheet -->
-      <button class="velora-nav-btn" title="Provenance & Reports" onclick="veloraApp.showToast('Public Benchmark: BDG2 v1.0 · DOE Whole-Building Dataset')">
+      <button class="velora-nav-btn" title="Provenance & Reports" onclick="veloraApp.showToast('Building energy source: BDG2 v1.0')">
         <span class="material-symbols-outlined text-[19px]">description</span>
       </button>
     </aside>
@@ -292,8 +292,8 @@
             <h1 class="text-3xl lg:text-[40px] font-extrabold tracking-tight text-[#1E2022] leading-[1.15]">
               EnergiOS<br>Dashboard Overview
             </h1>
-            <p id="site-subtitle-tag" class="text-xs font-mono font-medium text-[#71767B] mt-2 tracking-wide uppercase">
-              // SITE: BDG2-HOG-OFFICE · WHOLE-BUILDING METER · COMMERCIAL OFFICE · MARCH 2026
+            <p id="site-subtitle-tag" class="text-xs font-medium text-[#71767B] mt-2 tracking-wide">
+              Select a building to view its energy data
             </p>
           </div>
 
@@ -337,8 +337,10 @@
               <span id="metric-export-delta" class="text-xs font-semibold text-[#22C55E] mt-1 block">Forecast accuracy improvement: Not available</span>
             </div>
           </div>
+
+
           <details class="text-xs text-[#71767B] mt-3">
-            <summary class="cursor-pointer font-semibold">KPI estimate assumptions and sources</summary>
+            <summary class="cursor-pointer font-semibold">Calculation details &amp; sources</summary><p id="kpi-period-comparison" class="text-xs text-[#71767B] mt-3" aria-live="polite">Matching-period savings comparison: Not available.</p><p id="kpi-demand-savings" class="text-xs text-[#71767B] mt-2">Maximum-demand savings: Not available — complete billing-period demand data and tariff required.</p>
             <p class="mt-2">Demand source: <a class="underline" href="https://doi.org/10.5281/zenodo.3887306" target="_blank" rel="noreferrer">BDG2 v1.0 public benchmark</a>. Weather is either the explicitly identified fixed demo profile or <a class="underline" href="https://open-meteo.com/en/docs" target="_blank" rel="noreferrer">Open-Meteo</a> for a separate demo location; see Applied scenario inputs for the actual source. Each building uses its own forecast. An approved plan takes priority; otherwise a preview uses the active plan's shared solar/battery assumptions, or the engine's disclosed demo defaults. Preview calculation does not approve or apply a plan. Edit inputs in the Township AI panel.</p>
             <p id="kpi-estimate-evidence" class="mt-2" aria-live="polite">Energy comparison: Not available.</p>
             <p id="kpi-observed-comparison" class="mt-2"></p>
@@ -352,8 +354,8 @@
                 <input id="kpi-emissions" type="number" min="0" step="any" placeholder="Not configured" class="block w-full rounded-lg border border-slate-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-2 mt-1" />
               </label>
             </div>
-            <p class="mt-2">Estimated grid electricity saved = scenario solar-to-load + battery-to-load across the complete 24-hour plan. Percentage = estimated grid kWh saved ÷ ML-forecast demand kWh × 100. Compare with all-grid supply of the same demand; total building energy need does not decrease. Grid outages or unmet demand are not counted as savings.</p>
-            <p class="mt-2">Estimated grid purchase cost saved = estimated grid kWh saved × configured RM/kWh. The optional KPI tariff overrides valuation only; otherwise this scenario's RM/MYR price is used. Other currencies are not converted. User assumptions are saved in this browser; clear a field to remove it. No applicable tariff or official emissions factor is assumed. Costs exclude initial battery charging, degradation, CAPEX and tariff schedules. Carbon is calculated only with an entered factor, credits direct solar-to-load only, and excludes battery discharge because its charging source is unverified. Previews are cached for up to 15 minutes per building and input set; Refresh requests a new calculation. Approved plans retain their captured results.</p>
+            <p class="mt-2">Estimated grid electricity saved = all-grid forecast baseline minus scenario grid purchases minus energy needed to restore depleted initial battery charge (depletion ÷ charge efficiency). With unknown battery inventory, battery discharge receives no savings credit. Percentages use the matching 24-hour baseline. Total building consumption is unchanged; shifted energy is not counted as energy saved. Grid outages or unmet demand invalidate the estimate.</p>
+            <p class="mt-2">Estimated grid purchase cost saved = estimated grid kWh saved × configured RM/kWh. The optional KPI tariff overrides valuation only; otherwise this scenario's RM/MYR price is used. Other currencies are not converted. User assumptions are saved in this browser; clear a field to remove it. No applicable tariff or official emissions factor is assumed. Costs include a depleted-battery replenishment allowance; degradation, CAPEX and tariff schedules remain excluded. Cost percentage = (baseline cost minus optimised cost) / baseline cost × 100; a zero baseline has no percentage. Carbon is calculated only with an entered factor, credits direct solar-to-load only, and excludes battery discharge because its charging source is unverified. Previews are cached for up to 15 minutes per building and input set; Refresh requests a new calculation. Approved plans retain their captured results.</p>
             <p class="mt-2 font-semibold">Scenario estimate — no live control. ML predicts demand; dispatch and estimated grid-purchase savings are calculated from scenario assumptions. No savings probability, confidence guarantee or verified savings is available. Historical benchmark demand and demo weather have independent timelines.</p>
             <p class="mt-2">Accuracy improvement = baseline model test MAE − forecast model test MAE; percentage uses baseline MAE on the same test sample count. These are evaluation results, not savings.</p>
           </details>
@@ -367,6 +369,7 @@
             <img id="hero-building-photo" src="assets/idea_crops/exact_building_perfect.jpeg" alt="Rooftop Solar Architecture" class="exact-building-img">
           </div>
 
+          <p id="history-coverage" class="text-xs text-slate-500 mb-2" aria-live="polite">Observed hourly readings and forecast.</p>
           <!-- Floating Pill Buttons (Hourly / Daily / Monthly + Sliders + Download) -->
           <div class="flex items-center gap-2 mt-2 z-10">
             <!-- Segmented Timeframe Toggle -->
@@ -390,6 +393,8 @@
 
       </section>
 
+      <section id="township-savings" class="bg-white dark:bg-[#171e2b] border border-[#EBE7DF] dark:border-neutral-800 rounded-[24px] px-6 py-5 text-[#1E2022] dark:text-white" aria-label="Township projected savings" aria-live="polite"></section>
+
       <!-- =============================================================== -->
       <!-- MIDDLE ROW: ENERGY OVERVIEW (LEFT) + POWER DIAL + BATTERY       -->
       <!-- (100% Exact Layout of idea-02-light.jpeg)                       -->
@@ -401,25 +406,12 @@
           <div class="flex items-center justify-between mb-4">
             <h2 class="text-base font-bold text-[#1E2022]">Energy Overview</h2>
             <!-- Exact Legend from idea-02-light.jpeg with Project Variables -->
-            <div class="flex items-center gap-4 text-xs text-[#71767B]">
-              <div class="flex items-center gap-1.5">
-                <span class="w-3 h-0.5 bg-[#FF7A00] rounded-full"></span>
-                <span>Observed (kWh)</span>
-              </div>
-              <div class="flex items-center gap-1.5">
-                <span class="w-3 h-0.5 bg-[#FACC15] rounded-full"></span>
-                <span>24h Forecast</span>
-              </div>
-              <div class="flex items-center gap-1.5">
-                <span class="w-3 h-0.5 border-b-2 border-dashed border-[#22C55E]"></span>
-                <span>Baseline</span>
-              </div>
-            </div>
+            <div class="flex flex-wrap items-center justify-end gap-2 text-xs text-[#71767B]"><span id="chart-series-label">Observed (kWh) · 24h Forecast</span><a href="https://doi.org/10.5281/zenodo.3887306" target="_blank" rel="noopener noreferrer" class="underline underline-offset-2" title="Building Data Genome Project 2 v1.0 source">BDG2 source ↗</a></div>
           </div>
 
           <!-- Spline Line Chart Canvas -->
           <div class="relative w-full h-[220px]">
-            <canvas id="energy-overview-chart"></canvas>
+                <canvas id="energy-overview-chart"></canvas>
           </div>
         </div>
 
@@ -429,6 +421,7 @@
             <h2 class="text-base font-bold text-[#1E2022]">Power Demand</h2>
             <span id="asset-timezone-label" class="text-xs font-medium text-[#71767B]">US/Central</span>
           </div>
+          <p id="demand-period-note" class="text-[10px] text-[#71767B] mt-1">Observed demand</p>
 
           <!-- Circular Radial Dial Gauge with Speedometer Ticks -->
           <div class="relative w-full flex items-center justify-center my-3">
@@ -438,24 +431,24 @@
             </svg>
             <!-- Center Power Label and Value -->
             <div class="absolute inset-0 flex flex-col items-center justify-center">
-              <span class="text-[11px] text-[#71767B] font-medium uppercase tracking-wider">Demand</span>
+              <span id="dial-period-label" class="text-[11px] text-[#71767B] font-medium uppercase tracking-wider">Hourly average</span>
               <span id="dial-power-val" class="text-2xl font-extrabold text-[#1E2022] mt-0.5 tracking-tight">185.0</span>
-              <span class="text-[10px] text-[#71767B] font-medium">kWh</span>
+              <span class="text-[10px] text-[#71767B] font-medium">kW</span>
             </div>
           </div>
 
           <!-- Bottom 3 Columns: Min, Peak, Avg -->
           <div class="flex items-center justify-between text-center pt-2 border-t border-slate-100/60 text-xs text-[#71767B]">
             <div>
-              <span class="block text-[11px] text-[#71767B]">Min (24h)</span>
+              <span class="block text-[11px] text-[#71767B]">Min hourly avg</span>
               <span id="dial-min-val" class="font-bold text-[#1E2022] mt-0.5 block">148.2 <span class="text-[10px] font-normal">kWh</span></span>
             </div>
             <div>
-              <span class="block text-[11px] text-[#71767B]">Peak Load</span>
+              <span class="block text-[11px] text-[#71767B]">Peak hourly avg</span>
               <span id="dial-max-val" class="font-bold text-[#1E2022] mt-0.5 block">452.9 <span class="text-[10px] font-normal">kWh</span></span>
             </div>
             <div>
-              <span class="block text-[11px] text-[#71767B]">Avg Demand</span>
+              <span class="block text-[11px] text-[#71767B]">Mean hourly avg</span>
               <span id="dial-avg-val" class="font-bold text-[#1E2022] mt-0.5 block">184.9 <span class="text-[10px] font-normal">kWh</span></span>
             </div>
           </div>
@@ -472,11 +465,13 @@
           </div>
 
           <!-- Progress Bars List with Ruler Ticks -->
+          <p id="load-period-note" class="text-[10px] text-[#71767B] mt-1">Observed load factor</p>
+          <p id="period-forecast-note" class="text-[10px] text-[#71767B] mt-1">24-hour forecast</p>
           <div class="space-y-4 my-auto">
             <!-- Item 1: Active Demand / Peak Capacity -->
             <div>
               <div class="flex items-center justify-between text-xs mb-1">
-                <span class="text-[#71767B]">Active Load</span>
+                <span class="text-[#71767B]">Mean / Peak Load</span>
                 <span id="bar-energy-val" class="font-semibold text-[#1E2022]">185.0 / 452.9 kW</span>
               </div>
               <div class="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
@@ -500,7 +495,7 @@
             <!-- Item 3: Forecast Deviation (MAE Band) -->
             <div>
               <div class="flex items-center justify-between text-xs mb-1">
-                <span class="text-[#71767B]">Forecast Deviation</span>
+                <span class="text-[#71767B]">Model error (hourly)</span>
                 <span id="bar-temp-val" class="font-semibold text-[#1E2022]">MAE ±22.07 kWh</span>
               </div>
               <div class="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
@@ -528,7 +523,17 @@
                   Level & Rates
                 </span>
               </div>
-              <p id="battery-operations-note" class="text-xs text-[#71767B] dark:text-slate-400 mt-0.5">Scenario battery profile — approved dispatch plan when available; otherwise illustrative demo. No measured battery data.</p>
+              <p id="battery-operations-note" class="text-xs text-[#71767B] dark:text-slate-400 mt-0.5">Battery scenario calculated from the building demand forecast and demo inputs.</p>
+              <label class="block text-xs text-[#71767B] mt-2">Battery data
+                <select id="battery-data-source" class="rounded-lg border border-slate-200 bg-white dark:bg-neutral-900 px-2 py-1 ml-1">
+                  <option value="demo">Demo battery cycle</option>
+                  <option value="plan">Approved / forecast plan</option>
+                </select>
+              </label>
+              <details class="text-xs text-[#71767B] mt-1"><summary class="cursor-pointer">Battery assumptions &amp; sources</summary>
+                <pre id="battery-demo-sources" class="whitespace-pre-wrap break-words max-h-64 overflow-auto">Loading versioned assumptions…</pre>
+              </details>
+              <button id="battery-demo-retry" type="button" class="text-xs underline mt-1">Refresh demo</button>
             </div>
 
             <!-- View Toggle: Chart vs Table -->
@@ -566,11 +571,11 @@
             <table class="w-full text-left border-collapse text-xs">
               <thead class="sticky top-0 bg-slate-50 dark:bg-neutral-900 border-b border-slate-200 dark:border-neutral-800 z-10">
                 <tr class="text-[10px] font-bold uppercase tracking-wider text-[#71767B] dark:text-slate-400">
-                  <th class="py-2 px-3">Time</th>
+                  <th class="py-2 px-3">Period / Time</th>
                   <th class="py-2 px-3">Level (SOC)</th>
                   <th class="py-2 px-3">Status</th>
-                  <th class="py-2 px-3 text-right">Flow Rate</th>
-                  <th class="py-2 px-3 text-right">Pathway</th>
+                  <th class="py-2 px-3 text-right">Average power</th>
+                  <th class="py-2 px-3 text-right">Charge / Discharge</th>
                 </tr>
               </thead>
               <tbody id="battery-operations-table-body" class="divide-y divide-slate-100 dark:divide-neutral-800 font-mono">
@@ -610,10 +615,10 @@
           <div class="flex items-center justify-between mb-2">
             <div>
               <h2 class="text-base font-bold text-[#1E2022] dark:text-white">Battery Storage</h2>
-              <p class="text-xs text-[#71767B] dark:text-slate-400">Scenario battery assumptions — no live control</p>
+              <p id="battery-storage-note" class="text-xs text-[#71767B] dark:text-slate-400">Demo battery inputs · no live control</p>
             </div>
             <span id="battery-status-tag" class="text-xs font-semibold text-[#22C55E] bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-0.5 rounded-full border border-emerald-200/50 dark:border-emerald-800/60 font-mono">
-              ⚡ Charging
+              Loading scenario
             </span>
           </div>
 
@@ -626,8 +631,8 @@
               <line x1="70" y1="10" x2="70" y2="22" stroke="#EF4444" stroke-width="3" stroke-linecap="round" />
             </svg>
             <div class="absolute inset-0 flex flex-col items-center justify-center">
-              <span id="gauge-percent" class="text-3xl font-extrabold text-[#1E2022] dark:text-white tracking-tight">68<span class="text-sm font-semibold text-[#71767B] dark:text-slate-400">%</span></span>
-              <span id="gauge-status-rate" class="text-[11px] text-[#22C55E] font-semibold mt-0.5">+2% / hour</span>
+              <span id="gauge-percent" class="text-3xl font-extrabold text-[#1E2022] dark:text-white tracking-tight">—</span>
+              <span id="gauge-status-rate" class="text-[11px] text-[#22C55E] font-semibold mt-0.5">Loading scenario</span>
             </div>
           </div>
 
@@ -635,15 +640,15 @@
           <div class="space-y-2 pt-2.5 border-t border-slate-100 dark:border-neutral-800 text-xs">
             <div class="flex items-center justify-between">
               <span class="text-[#71767B] dark:text-slate-400">Current Power</span>
-              <span id="metric-current-power" class="font-bold text-[#1E2022] dark:text-white font-mono">185.0 kW</span>
+              <span id="metric-current-power" class="font-bold text-[#1E2022] dark:text-white font-mono">—</span>
             </div>
             <div class="flex items-center justify-between">
               <span class="text-[#71767B] dark:text-slate-400">Backup Duration</span>
-              <span id="metric-duration" class="font-bold text-[#1E2022] dark:text-white font-mono">~12.5 hrs</span>
+              <span id="metric-duration" class="font-bold text-[#1E2022] dark:text-white font-mono">—</span>
             </div>
             <div class="flex items-center justify-between">
               <span class="text-[#71767B] dark:text-slate-400">Capacity</span>
-              <span id="metric-capacity" class="font-bold text-[#1E2022] dark:text-white font-mono">452.9 kWh</span>
+              <span id="metric-capacity" class="font-bold text-[#1E2022] dark:text-white font-mono">—</span>
             </div>
           </div>
         </div>
@@ -659,9 +664,9 @@
   </div>
 
   <section data-dispatch-summary class="w-full max-w-[1540px] mx-auto mt-4 p-4 rounded-3xl border border-emerald-200 dark:border-emerald-900 text-sm space-y-2" aria-label="Approved dispatch scenario"></section>
-  <script src="src/js/dispatch_plans.js?v=6"></script>
+  <script src="src/js/dispatch_plans.js?v=9"></script>
   <!-- Controller Scripts -->
   <script src="src/js/dynamic_island.js?v=dispatch-1"></script>
-  <script src="src/js/velora_app.js?v=2.3.6"></script>
+  <script src="src/js/velora_app.js?v=2.3.17"></script>
 </body>
 </html>

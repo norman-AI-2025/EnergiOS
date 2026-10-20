@@ -30,7 +30,79 @@ Notification timing: PV/demand ≥ 1.05 for two consecutive hours permits a Sola
 
 Approval updates only shared browser-local scenario state, after fresh server review and an unchanged applied-plan token/pending-card check. Township, energy-flow/battery and KPI views receive the existing update event. Dismissal keeps the applied plan. Stable transition IDs prevent repeat popups; a 15-second popup cooldown prevents rapid reopening. Further calculated cards can appear in an already open panel. No equipment-command or database-write path exists.
 
+## Historical dashboard views
+
+Daily and Monthly use `GET /assets/{asset_id}/readings/summary?period=daily|monthly`.
+The default window is the latest observed calendar month in the asset timezone.
+Optional paired `from`/`to` UTC bounds are limited to 32 days and hourly boundaries;
+the server reads at most 1,000 hourly rows. Calendar grouping accounts for daylight
+saving transitions. Responses retain BDG2 provenance, kWh units, observed interval
+counts, expected interval counts and partial/missing status. Missing buckets remain
+null; a monthly subtotal with incomplete coverage is never presented as a full month.
+
+The current bundled cohort has 168 hours in December 2017, hence 168/744 monthly
+coverage. Historical totals contain no forecasts or generated readings.
+
+Dashboard requests additionally set `include_forecast=true`. The response then
+includes a separate `forecast` object summing only the existing `/forecast` endpoint's
+24 hourly predictions into local calendar days/months. No horizon is extended,
+no forecast is inserted into readings, and existing model evaluation remains unchanged.
+Both chart series use lines: observed orange, forecast dashed green. The green
+connection starts at the final observed point, explicitly identified as an observed
+anchor in the tooltip. Monthly predicted points are partial-month 24-hour subtotals,
+not complete monthly predictions; coverage counts remain separate for each series.
+
 ## Recording flow
+
+### Battery cycle demonstration
+
+`GET /demo/battery-cycle/{asset_id}?period=hourly|daily|monthly` serves the separate
+versioned `battery_cycle_demo_v2.json` profile. This is synthetic demonstration data,
+not battery measurements or an extended ML forecast. The existing 24-hour BDG2 model
+shape is varied with authored month/weekend factors, bounded hourly demand changes,
+and seeded, correlated day-to-day weather/cloud inputs. Each building has a stable
+seed; there is no repeating seven-day weather loop and no jitter applied to results.
+An explicit 17:00–21:00 evening-support schedule uses 30–85% of discharge rating,
+with an additional 80–100% hourly multiplier. Grid supports demand outside that
+window, retaining stored energy. These are demonstration policy assumptions, not
+an established tariff-optimal policy. Existing dispatch formulas carry SOC through a fictional
+2026 year. Hourly shows 19 October (24 intervals), Daily shows October (31 days), and
+Monthly shows the synthetic year (12 months). Daily/monthly charts display charge and
+discharge kWh plus final SOC; tables also disclose the min/max SOC within each period.
+
+Demo equipment assumptions (capacity kWh / PV kWp / charge kW / discharge kW):
+Dona 800/1200/150/100; Donnie 200/200/50/30; Francisco 600/900/100/80;
+Bill 650/1000/125/90. Initial SOC 60%, reserve 20%, charge/discharge efficiency 92%,
+PV ratio 0.8. The central profile records all calendar/weather multipliers and sources.
+These are authored examples, not installed equipment specifications or local benchmarks.
+All variability bounds, seed, persistence and overcast assumptions are recorded in the
+central profile and displayed in the assumptions disclosure. Charge/discharge bars,
+SOC, tables and storage cards derive from the same energy-balanced hourly series.
+The observed Energy Overview remains unmodified: a genuinely flatter measured
+building profile is not replaced with synthetic variability for appearance.
+
+The Battery data selector keeps this view separate from approved plans and savings.
+Switch to Approved / forecast plan to inspect the actual existing 24-hour scenario,
+including a correctly flat reserve-only plan. No demo cycle can approve or control anything.
+Monthly Energy Overview now uses observed daily detail within the recorded month with
+only the existing 24-hour forecast, instead of joining incomparable partial-month sums.
+
+Dashboard cards follow the selected period. Hourly shows the latest observed hourly
+average and 24-hour range; Daily uses the latest recorded local day; Monthly uses
+the latest recorded local month with coverage counts. Demand is kW averaged over
+hourly intervals. Load factor is mean/peak hourly demand; intensity is observed
+period kWh divided by measured building area. Missing area is not replaced. Model
+MAE retains its original hourly evaluation basis in every view.
+
+In Approved / forecast plan mode, battery operations and storage use one dispatch response: approved plans first,
+otherwise an unapproved calculated preview. If live weather is unavailable, the
+existing central fixed demo profile is used explicitly. No sine-wave SOC, inferred
+equipment capacity or independent battery flows are generated by the frontend.
+Daily/monthly battery charts group only the existing 24 scenario hours, sum charge
+and discharge, and show the final SOC per group. No month-long battery history is
+invented. A battery held at reserve correctly remains in standby. Backup duration
+accounts for reserve, discharge efficiency and power limits. No physical battery
+measurements or control connection are established.
 
 Open `http://127.0.0.1:4176/digital-twin.html` with the backend on port 8000. Fixed mode starts after the building picker loads. Alternatively choose a BDG2 building and press **Run fixed demo / next source change**. The separate live-weather form remains available; fixed mode explicitly overrides those form values with its profile.
 

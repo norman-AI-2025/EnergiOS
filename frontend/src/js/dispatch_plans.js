@@ -104,10 +104,133 @@ class DispatchPlanStore {
   active() { const state = this.read(); return state.approved[state.activeAssetId] || null; }
   impact(plan) {
     const result = plan.result;
-    const displaced = result.source_mix_kwh.solar_to_load_kwh + result.source_mix_kwh.battery_to_load_kwh;
+    const a = result.assumptions || {}, hours = result.hours || [];
+    const initial = a.battery_capacity_kwh * a.battery_initial_soc_pct / 100;
+    const final = hours[hours.length - 1]?.battery_soc_kwh;
+    const known = Number.isFinite(initial) && initial >= 0 && Number.isFinite(final) && final >= 0
+      && Number.isFinite(a.charge_efficiency) && a.charge_efficiency > 0 && a.charge_efficiency <= 1;
+    const replenishment = known ? Math.max(0, initial - final) / a.charge_efficiency : result.source_mix_kwh.battery_to_load_kwh;
+    const sum = key => hours.reduce((total, hour) => total + hour[key], 0);
+    const complete = hours.length === 24 && hours.every(h => ['demand_forecast_kwh', 'grid_to_load_kwh'].every(k => Number.isFinite(h[k])));
+    const displaced = complete ? sum('demand_forecast_kwh') - sum('grid_to_load_kwh') - replenishment
+      : result.source_mix_kwh.solar_to_load_kwh + result.source_mix_kwh.battery_to_load_kwh - replenishment;
     const cost = result.estimated_grid_cost;
     return { displacedKwh: displaced, costAvoided: cost ? displaced * cost.price_per_kwh : null,
-      currency: cost?.currency || '', gridCost: cost?.value ?? null };
+      currency: cost?.currency || '', gridCost: cost ? (complete ? sum('grid_to_load_kwh') * cost.price_per_kwh : cost.value) + replenishment * cost.price_per_kwh : null };
+  }
+  expectedLocalHours(key, period, zone) {
+    if (period === 'Hourly') return 1;
+    const [year, month, day] = key.split('-').map(Number);
+    const days = period === 'Daily' ? 1 : new Date(year, month, 0).getDate();
+    const start = Date.UTC(year, month - 1, day || 1) - 36 * 3600000;
+    const end = start + (days * 24 + 72) * 3600000;
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone:zone, year:'numeric', month:'2-digit', day:'2-digit',
+    });
+    let count = 0;
+    for (let stamp = start; stamp < end; stamp += 3600000) {
+      const parts = formatter.formatToParts(new Date(stamp));
+      const value = type => parts.find(part => part.type === type)?.value;
+      const localDay = `${value('year')}-${value('month')}-${value('day')}`;
+      if ((period === 'Daily' ? localDay : localDay.slice(0, 7)) === key) count++;
+    }
+    return count;
+  }
+  periodSavings(plans, period = 'Hourly', options = {}) {
+    if (!['Hourly', 'Daily', 'Monthly'].includes(period)) return null;
+    const candidates = plans.filter(plan => Array.isArray(plan?.result?.hours));
+    if (!candidates.length) return null;
+    const rows = new Map();
+    const sources = new Set();
+    let omitted = 0;
+    for (const plan of candidates) {
+      const result = plan.result, hours = result.hours, a = result.assumptions || {};
+      if (!result.asset_id || sources.has(result.asset_id)) { omitted++; continue; }
+      if (hours.length !== 24 || a.grid_available !== true) { omitted++; continue; }
+      const initial = a.battery_capacity_kwh * a.battery_initial_soc_pct / 100;
+      const final = hours.at(-1)?.battery_soc_kwh;
+      const validInventory = [initial, final, a.charge_efficiency].every(Number.isFinite)
+        && initial >= 0 && final >= 0 && a.charge_efficiency > 0 && a.charge_efficiency <= 1;
+      const validHours = hours.every((h, i) => h && Number.isFinite(Date.parse(h.demand_forecast_timestamp))
+        && (i === 0 || Date.parse(h.demand_forecast_timestamp) - Date.parse(hours[i - 1].demand_forecast_timestamp) === 3600000)
+        && ['demand_forecast_kwh', 'grid_to_load_kwh', 'solar_to_load_kwh', 'battery_to_load_kwh', 'unmet_demand_kwh']
+          .every(key => Number.isFinite(h[key]) && h[key] >= 0)
+        && h.unmet_demand_kwh === 0
+        && Math.abs(h.demand_forecast_kwh - h.grid_to_load_kwh - h.solar_to_load_kwh - h.battery_to_load_kwh) < .02);
+      if (!validHours) { omitted++; continue; }
+      const discharged = hours.reduce((n, h) => n + h.battery_to_load_kwh, 0);
+      const replenishment = validInventory ? Math.max(0, initial - final) / a.charge_efficiency : discharged;
+      if (discharged === 0 && replenishment > .01) { omitted++; continue; }
+      const price = Number.isFinite(options.tariffRmPerKwh) && options.tariffRmPerKwh >= 0
+        ? options.tariffRmPerKwh : result.estimated_grid_cost?.currency?.toUpperCase() === 'MYR'
+        || result.estimated_grid_cost?.currency?.toUpperCase() === 'RM'
+        ? result.estimated_grid_cost.price_per_kwh : null;
+      const tariff = Number.isFinite(price) && price >= 0 ? price : null;
+      const zone = options.reportingTimezone || options.timezoneByAsset?.[result.asset_id]
+        || result.demand_provenance?.asset_timezone || 'UTC';
+      for (const h of hours) {
+        const stamp = new Date(h.demand_forecast_timestamp);
+        const local = new Intl.DateTimeFormat('en-CA', {timeZone:zone, year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', hourCycle:'h23'}).formatToParts(stamp);
+        const part = type => local.find(x => x.type === type)?.value;
+        const day = `${part('year')}-${part('month')}-${part('day')}`;
+        const localUtc = Date.UTC(Number(part('year')), Number(part('month')) - 1,
+          Number(part('day')), Number(part('hour')));
+        const offset = Math.round((localUtc - stamp.getTime()) / 3600000);
+        const suffix = `UTC${offset < 0 ? '-' : '+'}${String(Math.abs(offset)).padStart(2,'0')}`;
+        const key = period === 'Monthly' ? day.slice(0, 7) : period === 'Daily' ? day
+          : `${day} ${part('hour')}:00 ${suffix}`;
+        const id = `${key}|${h.demand_forecast_timestamp}`;
+        const row = rows.get(id) || {period:key, timestamp:h.demand_forecast_timestamp, baselineKwh:0, optimisedGridKwh:0,
+          baselineCostRm:0, optimisedCostRm:0, solarToLoadKwh:0, batteryToLoadKwh:0,
+          replenishmentKwh:0, priced:true, buildings:new Set(), count:0};
+        const allowance = discharged > 0 ? replenishment * h.battery_to_load_kwh / discharged : 0;
+        row.baselineKwh += h.demand_forecast_kwh;
+        row.optimisedGridKwh += h.grid_to_load_kwh + allowance;
+        row.solarToLoadKwh += h.solar_to_load_kwh;
+        row.batteryToLoadKwh += h.battery_to_load_kwh;
+        row.replenishmentKwh += allowance;
+        if (tariff === null) row.priced = false;
+        else { row.baselineCostRm += h.demand_forecast_kwh * tariff; row.optimisedCostRm += (h.grid_to_load_kwh + allowance) * tariff; }
+        row.buildings.add(result.asset_id); row.count++;
+        rows.set(id, row);
+      }
+      sources.add(result.asset_id);
+    }
+    if (!rows.size) return null;
+    const grouped = new Map();
+    const reportingTimezone = options.reportingTimezone || options.timezoneByAsset?.[[...sources][0]] || 'UTC';
+    for (const row of rows.values()) {
+      const g = grouped.get(row.period) || {period:row.period, baselineKwh:0, optimisedGridKwh:0,
+        baselineCostRm:0, optimisedCostRm:0, solarToLoadKwh:0, batteryToLoadKwh:0,
+        replenishmentKwh:0, priced:true, intervals:0, timestamps:[], buildings:new Set(),
+        allBuildingsPresent:true,
+        baselinePeakKw:0, optimisedPeakKw:0};
+      g.baselineKwh += row.baselineKwh; g.optimisedGridKwh += row.optimisedGridKwh;
+      g.baselineCostRm += row.baselineCostRm; g.optimisedCostRm += row.optimisedCostRm;
+      g.solarToLoadKwh += row.solarToLoadKwh; g.batteryToLoadKwh += row.batteryToLoadKwh;
+      g.replenishmentKwh += row.replenishmentKwh;
+      g.priced &&= row.priced; g.intervals++; g.timestamps.push(row.timestamp);
+      g.allBuildingsPresent &&= row.buildings.size === sources.size;
+      for (const asset of row.buildings) g.buildings.add(asset);
+      // Concurrent kWh over one hour is interval-average kW; never sum separate building peaks.
+      g.baselinePeakKw = Math.max(g.baselinePeakKw, row.baselineKwh);
+      g.optimisedPeakKw = Math.max(g.optimisedPeakKw, row.optimisedGridKwh);
+      grouped.set(row.period, g);
+    }
+    const periods = [...grouped.values()].sort((a,b) => a.period.localeCompare(b.period)).map(g => {
+      const saved = g.baselineKwh - g.optimisedGridKwh;
+      const costSaved = g.priced ? g.baselineCostRm - g.optimisedCostRm : null;
+      const expected = this.expectedLocalHours(g.period, period, reportingTimezone);
+      return {...g, buildings:[...g.buildings], gridSavedKwh:saved,
+        gridSavedPct:g.baselineKwh > 0 ? saved / g.baselineKwh * 100 : null,
+        costSavedRm:costSaved, costSavedPct:g.priced && g.baselineCostRm > 0 ? costSaved / g.baselineCostRm * 100 : null,
+        consumptionSavedKwh:0, complete:g.intervals === expected && g.allBuildingsPresent,
+        expectedIntervals:expected,
+        demandChargeSavingsRm:null};
+    });
+    return {period, periods, reportingTimezone, includedBuildings:sources.size, omittedBuildings:omitted,
+      label:'Projected scenario only; measured post-action savings unavailable; no live control',
+      demandChargeSavingsRm:null};
   }
 }
 
@@ -165,7 +288,7 @@ class DispatchPlanUI {
         <p>Demand forecast ${hour.demand_forecast_kwh.toFixed(1)} kWh → Solar ${hour.solar_to_load_kwh.toFixed(1)} + Battery ${hour.battery_to_load_kwh.toFixed(1)} + Grid ${hour.grid_to_load_kwh.toFixed(1)} + Unmet ${hour.unmet_demand_kwh.toFixed(1)} kWh.</p>
         <p>Solar → battery ${hour.solar_to_battery_kwh.toFixed(1)} kWh · curtailed ${hour.curtailed_solar_kwh.toFixed(1)} kWh · battery state ${hour.battery_soc_kwh.toFixed(1)} / ${r.assumptions.battery_capacity_kwh} kWh.</p>
         <p>24h estimated grid electricity saved: ${impact.displacedKwh.toFixed(1)} kWh. Estimated import cost: ${impact.gridCost === null ? 'Not available' : `${this.escape(impact.currency)} ${impact.gridCost.toFixed(2)}`}; estimated grid purchase cost saved: ${impact.costAvoided === null ? 'Not available — enter a price assumption' : `${this.escape(impact.currency)} ${impact.costAvoided.toFixed(2)}`}.</p>
-        <p class="text-xs mt-1">Price assumption: ${r.estimated_grid_cost ? `${this.escape(impact.currency)} ${r.estimated_grid_cost.price_per_kwh} / kWh` : 'Not configured'}. Compared with an all-grid scenario for the same served demand; excludes initial battery charging cost, CAPEX, degradation and tariff schedules. No verified savings or carbon claim. Historical BDG2 forecast and demo weather have independent timelines. Observed charts are unchanged. Sources: <a class="underline" href="https://doi.org/10.5281/zenodo.3887306">BDG2 public benchmark</a>${r.video_demo ? ` · Authored fixed demo weather (${this.escape(r.video_demo.version)})` : ' · <a class="underline" href="https://open-meteo.com/en/docs">Open-Meteo</a>'}.</p>`;
+        <details class="text-xs mt-1"><summary class="cursor-pointer">Calculation details &amp; sources</summary><p>Price assumption: ${r.estimated_grid_cost ? `${this.escape(impact.currency)} ${r.estimated_grid_cost.price_per_kwh} / kWh` : 'Not configured'}. Compared with an all-grid scenario for the same served demand; includes a depleted-battery replenishment allowance; excludes CAPEX, degradation and tariff schedules. With unknown battery inventory, battery discharge receives no savings credit. Total building consumption is unchanged. No verified savings or carbon claim. Historical BDG2 forecast and demo weather have independent timelines. Observed charts are unchanged. Sources: <a class="underline" href="https://doi.org/10.5281/zenodo.3887306">BDG2 public benchmark</a>${r.video_demo ? ` · Authored fixed demo weather (${this.escape(r.video_demo.version)})` : ' · <a class="underline" href="https://open-meteo.com/en/docs">Open-Meteo</a>'}.</p></details>`;
     }
   }
   async explain(id) {

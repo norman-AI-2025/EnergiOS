@@ -266,7 +266,7 @@
       <a href="settings.html" class="velora-nav-btn" title="Settings & Preferences">
         <span class="material-symbols-outlined text-[19px]">settings</span>
       </a>
-      <button class="velora-nav-btn" title="Provenance & Reports" onclick="twinApp.showToast('Public Benchmark: BDG2 v1.0 · Malaysian TNB Commercial Tariffs')">
+      <button class="velora-nav-btn" title="Provenance & Reports" onclick="twinApp.showToast('Building energy source: BDG2 v1.0')">
         <span class="material-symbols-outlined text-[19px]">description</span>
       </button>
     </aside>
@@ -642,10 +642,10 @@
           </div>
           <span class="px-3 py-1 rounded-full border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 text-xs font-semibold">Deterministic decision policy · hourly intervals</span>
         </div>
-        <p class="mt-3 text-xs text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-xl p-3">BDG2 demand uses historical benchmark timestamps. Fixed video mode uses authored demo weather; the optional live-weather form uses Open-Meteo for separate demo coordinates. These independent timelines form a scenario illustration. No actual building location, current equipment state or control connection is established.</p>
+        <details class="mt-3 text-xs text-slate-500"><summary class="cursor-pointer">Sources &amp; scenario assumptions</summary><p>BDG2 demand uses historical benchmark timestamps. Fixed video mode uses authored demo weather; the optional live-weather form uses Open-Meteo for separate demo coordinates. These independent timelines form a scenario illustration. No actual building location, current equipment state or control connection is established.</p></details>
         <div class="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30 p-3 text-sm space-y-2">
-          <p class="font-bold">Fixed video demonstration · Demo inputs, no live control</p>
-          <p class="text-xs">Uses the selected building's pinned BDG2 history, the existing seasonal forecast routine, authored weather, 1,200 kWp PV, a 250 kWh battery held at its 20% reserve with charging disabled, and an arbitrary MYR 0.50/kWh demo tariff. These fixed inputs override the live-weather form below only for this walkthrough. The AI panel shows the computed next source change and all assumptions.</p>
+          <p class="font-bold">Reference scenario · Demo inputs</p>
+          <details class="text-xs"><summary class="cursor-pointer">Reference inputs</summary><p>BDG2 history with authored weather. PV: 1,200 kWp. Battery: 250 kWh at 20% reserve; charging disabled. Tariff assumption: MYR 0.50/kWh. These inputs apply only to the reference scenario.</p></details>
           <div class="flex flex-wrap gap-2"><button id="video-demo-run" type="button" class="rounded-xl px-3 py-2 bg-emerald-700 text-white font-semibold disabled:opacity-60">Run fixed demo / next source change</button><button id="video-demo-reset" type="button" class="rounded-xl px-3 py-2 border border-emerald-300 font-semibold">Restart fixed demo</button></div>
         </div>
       </div>
@@ -744,7 +744,7 @@
   </div>
 
   <section data-dispatch-summary class="w-full max-w-[1540px] mx-auto mt-4 p-4 rounded-3xl border border-emerald-200 dark:border-emerald-900 text-sm space-y-2" aria-label="Approved dispatch scenario"></section>
-  <script src="src/js/dispatch_plans.js?v=6"></script>
+  <script src="src/js/dispatch_plans.js?v=7"></script>
   <!-- Scripts -->
   <script src="src/js/dynamic_island.js?v=dispatch-1"></script>
   <script src="src/js/digital_twin_app.js?v=dispatch-6"></script>
